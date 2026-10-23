@@ -1,0 +1,243 @@
+# Canonical profile fields. Every scheme rule (curated or web-discovered) may only use
+# these names, and every profile the LLM extracts is checked against them.
+# A criterion that fits no field goes into a scheme's `unmapped_criteria`, never into a new field.
+#
+# type:  bool | int | number | enum | str
+# group: personal | location | money | work | education | family | land | housing |
+#        exclusions | scheme_lists | dependency
+# question: id in questions.yaml that asks for it (optional until Phase E adds questions)
+# Add a field only when several schemes need it; keep names stable, rules depend on them.
+
+# ---------- personal ----------
+age:
+  type: int
+  min: 0
+  max: 120
+  group: personal
+  question: age
+  description: "Age in completed years"
+gender:
+  question: gender
+  type: enum
+  values: [male, female, transgender]
+  group: personal
+  description: "Gender of the person"
+marital_status:
+  question: marital
+  type: enum
+  values: [never_married, married, widowed, divorced, separated, abandoned]
+  group: personal
+  description: "Marital status; widowed and abandoned matter for pension schemes"
+social_category:
+  question: category
+  type: enum
+  values: [sc, st, obc, ews, general]
+  group: personal
+  description: "Caste category as on the caste certificate (EWS for economically weaker general category)"
+is_minority:
+  type: bool
+  group: personal
+  description: "Belongs to a notified minority community (Muslim, Christian, Sikh, Buddhist, Jain, Parsi)"
+disability_percent:
+  question: disability
+  type: int
+  min: 0
+  max: 100
+  group: personal
+  description: "Disability percentage on the disability certificate (UDID); 0 if none"
+is_ex_serviceman:
+  type: bool
+  group: personal
+  description: "Retired or released member of the armed forces"
+is_pregnant_or_lactating:
+  type: bool
+  group: personal
+  description: "Currently pregnant or breastfeeding a child under 6 months"
+
+# ---------- location ----------
+state:
+  question: state
+  type: enum
+  values: [andhra_pradesh, arunachal_pradesh, assam, bihar, chhattisgarh, goa, gujarat, haryana,
+           himachal_pradesh, jharkhand, karnataka, kerala, madhya_pradesh, maharashtra, manipur,
+           meghalaya, mizoram, nagaland, odisha, punjab, rajasthan, sikkim, tamil_nadu, telangana,
+           tripura, uttar_pradesh, uttarakhand, west_bengal,
+           andaman_and_nicobar_islands, chandigarh, dadra_and_nagar_haveli_and_daman_and_diu, delhi,
+           jammu_and_kashmir, ladakh, lakshadweep, puducherry]
+  group: location
+  description: "State or union territory of residence"
+district:
+  type: str
+  normalize: key
+  aliases: {ahilyanagar: ahmednagar, chhatrapati_sambhajinagar: aurangabad, sambhajinagar: aurangabad,
+            dharashiv: osmanabad, mumbaicity: mumbai_city, mumbaisuburban: mumbai_suburban}
+  group: location
+  description: "District of residence (lowercase key, e.g. beed, pune, mumbai_city)"
+residence:
+  type: enum
+  values: [rural, urban]
+  group: location
+  description: "Lives in a village (rural) or a town/city (urban)"
+
+# ---------- money ----------
+annual_family_income_inr:
+  question: income
+  type: number
+  min: 0
+  group: money
+  description: "Total yearly income of the whole family in rupees"
+is_bpl:
+  type: bool
+  group: money
+  question: bpl
+  description: "Family has a BPL / Antyodaya / priority household ration card"
+ration_card_type:
+  type: enum
+  values: [antyodaya, priority_household, bpl, apl, none]
+  group: money
+  description: "Type of ration card the family holds"
+has_bank_account:
+  type: bool
+  group: money
+  description: "Has a bank or post office savings account in own name"
+family_monthly_pension_inr:
+  type: number
+  min: 0
+  group: money
+  description: "Highest monthly pension received by any family member, in rupees; 0 if none"
+
+# ---------- work ----------
+occupation:
+  question: occupation
+  type: enum
+  values: [farmer, agricultural_labourer, construction_worker, street_vendor, artisan, fisher, weaver,
+           domestic_worker, other_unorganised_worker, self_employed, salaried_private, govt_employee,
+           student, unemployed, homemaker, retired]
+  group: work
+  description: "Main occupation of the person"
+is_construction_worker_registered:
+  type: bool
+  group: work
+  description: "Registered with the state Building and Other Construction Workers welfare board"
+has_eshram_card:
+  type: bool
+  group: work
+  description: "Registered on e-Shram as an unorganised worker"
+
+# ---------- education ----------
+is_student:
+  type: bool
+  group: education
+  description: "Currently enrolled in school, college or a course"
+current_study_level:
+  type: enum
+  values: [class_1_to_8, class_9_to_10, class_11_to_12, iti_or_diploma, undergraduate, postgraduate, phd]
+  group: education
+  description: "Level the student is studying at now (pre-matric = class 1-10, post-matric = class 11 and above)"
+highest_education:
+  type: enum
+  values: [none, primary, class_10, class_12, iti_or_diploma, graduate, postgraduate, phd]
+  group: education
+  description: "Highest education completed"
+
+# ---------- family ----------
+family_size:
+  type: int
+  min: 1
+  max: 50
+  group: family
+  description: "Number of people in the household"
+num_children:
+  type: int
+  min: 0
+  max: 20
+  group: family
+  description: "Number of living children"
+has_girl_child_under_10:
+  type: bool
+  group: family
+  description: "Has a daughter younger than 10 years"
+
+# ---------- land ----------
+owns_cultivable_land:
+  type: bool
+  group: land
+  question: owns_land
+  description: "Family owns farm land in its own name"
+land_owned_before_2019_02_01:
+  type: bool
+  group: land
+  question: land_before_2019
+  description: "Land was in the family's name before 1 February 2019 (PM-KISAN cut-off)"
+land_acres:
+  type: number
+  min: 0
+  group: land
+  description: "Total cultivable land owned by the family, in acres"
+is_institutional_landholder:
+  type: bool
+  group: land
+  question: exclusions
+  description: "Land is held by a trust, company or other institution"
+
+# ---------- housing ----------
+owns_pucca_house:
+  type: bool
+  group: housing
+  description: "Family already owns a pucca (permanent) house anywhere in India"
+
+# ---------- exclusions (mostly PM-KISAN) ----------
+family_income_tax_payer:
+  type: bool
+  group: exclusions
+  question: exclusions
+  description: "Anyone in the family paid income tax in the last assessment year"
+family_constitutional_or_elected_post:
+  type: bool
+  group: exclusions
+  question: exclusions
+  description: "Anyone in the family holds or held a constitutional post or is/was an elected representative"
+family_govt_employee_excluded:
+  type: bool
+  group: exclusions
+  question: exclusions
+  description: "Anyone in the family is a serving or retired government employee above Group D / MTS"
+family_registered_professional:
+  type: bool
+  group: exclusions
+  question: exclusions
+  description: "Anyone in the family is a registered doctor, engineer, lawyer, CA or architect in practice"
+family_member_already_receiving:
+  type: bool
+  group: exclusions
+  question: already_receiving
+  description: "Another member of the same family already receives this scheme's benefit"
+
+# ---------- scheme lists the user must check on a portal ----------
+in_pmjay_beneficiary_list:
+  type: bool
+  group: scheme_lists
+  question: pmjay_list
+  description: "Family appears on the Ayushman Bharat (PM-JAY) beneficiary list"
+
+# ---------- dependency flags used by preflight ----------
+ekyc_done:
+  type: bool
+  group: dependency
+  description: "Aadhaar e-KYC completed on the scheme portal"
+land_record_seeded:
+  type: bool
+  group: dependency
+  description: "Land records verified and seeded on the scheme portal"
+bank_aadhaar_npci_seeded:
+  type: bool
+  group: dependency
+  description: "Bank account linked to Aadhaar in the NPCI mapper (DBT enabled)"
+bank_account_active:
+  type: bool
+  group: dependency
+  description: "Bank account is active (not dormant or frozen)"
+ayushman_card_made:
+  type: bool
+  group: dependency
+  description: "Ayushman card has been created for the person"

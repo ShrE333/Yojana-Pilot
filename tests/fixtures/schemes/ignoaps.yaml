@@ -1,0 +1,77 @@
+# Indira Gandhi National Old Age Pension Scheme (part of NSAP)
+# Central share: Rs 200/month (60-79), Rs 500/month (80+). States add their own top-up,
+# so the real amount differs by state. Add a Maharashtra-specific file for the state top-up.
+
+id: ignoaps
+name: Indira Gandhi National Old Age Pension (IGNOAPS)
+name_hi: इंदिरा गांधी राष्ट्रीय वृद्धावस्था पेंशन
+name_mr: इंदिरा गांधी राष्ट्रीय वृद्धापकाळ निवृत्तीवेतन
+source_url: https://nsap.nic.in/
+other_sources:
+  - https://en.vikaspedia.in/schemesall/schemes-for-senior-citizens/indira-gandhi-national-old-age-pension-scheme
+last_verified: 2026-10-21
+benefit_summary: "Monthly pension: central share Rs 200 (age 60-79) or Rs 500 (80+), plus state top-up"
+benefit_annual_inr: 2400   # central share only, age 60-79
+
+rank:
+  value_score: 3
+  effort: 2
+
+eligibility:
+  all:
+    - field: age
+      op: gte
+      value: 60
+      near_miss: 2          # within 2 years -> "near miss"
+      reason: "Applicant must be 60 or older"
+    - field: is_bpl
+      op: eq
+      value: true
+      reason: "Applicant must belong to a Below Poverty Line household"
+
+dependencies:
+  - id: bank_account_active
+    label: "Bank or post office account active"
+    fix: reactivate_account
+  - id: bank_aadhaar_npci_seeded
+    label: "Account linked to Aadhaar for DBT"
+    fix: npci_seeding
+
+documents:
+  - {name: "Aadhaar card", issued_by: "UIDAI / Aadhaar Seva Kendra", key: aadhaar}
+  - {name: "Age proof (birth certificate, school record or Aadhaar)", issued_by: "Gram panchayat / school / UIDAI", key: age_proof}
+  - {name: "BPL ration card or BPL certificate", issued_by: "Tehsil / supply office", key: bpl_card}
+  - {name: "Bank or post office passbook", issued_by: "Bank / post office", key: bank_passbook}
+
+records_to_match:
+  - [aadhaar, bank_passbook]
+  - [aadhaar, bpl_card]
+
+actions:
+  reactivate_account:
+    text: "Reactivate the bank account at the branch (update KYC, do a small transaction)"
+    where: "Bank branch or post office"
+  npci_seeding:
+    text: "Ask the bank to link the account to Aadhaar for DBT payments"
+    where: "Bank branch or post office"
+  fix_name_mismatch:
+    text: "Make the name the same on Aadhaar, the ration card and the passbook"
+    where: "Aadhaar Seva Kendra, tehsil supply office, bank branch"
+  follow_up_sanction:
+    text: "Ask the office where you applied whether the sanction committee has approved the pension"
+    where: "Block Development Office (rural) or tehsil / social welfare office"
+  file_grievance:
+    text: "File a grievance with the district social welfare officer"
+    where: "District social welfare office"
+
+status_map:
+  "payment failed":
+    - {action: npci_seeding, weight: 0.5, boost_if: npci_not_seeded}
+    - {action: reactivate_account, weight: 0.3, boost_if: account_inactive}
+    - {action: fix_name_mismatch, weight: 0.2, boost_if: name_mismatch}
+  "pending":
+    - {action: follow_up_sanction, weight: 0.8}
+    - {action: file_grievance, weight: 0.2}
+  "rejected":
+    - {action: fix_name_mismatch, weight: 0.4, boost_if: name_mismatch}
+    - {action: file_grievance, weight: 0.6}

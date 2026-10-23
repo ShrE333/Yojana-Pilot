@@ -1,0 +1,110 @@
+# Questions the bot can ask. One question can fill several profile fields,
+# which keeps the conversation to 5-7 questions.
+# `sets` maps each answer to the fields it fills.
+
+- id: age
+  text_en: "How old is the person?"
+  text_hi: "व्यक्ति की उम्र कितनी है?"
+  text_mr: "व्यक्तीचे वय किती आहे?"
+  type: number
+  fields: [age]
+
+- id: owns_land
+  text_en: "Does the family own farm land in their own name?"
+  text_hi: "क्या परिवार के नाम पर खेती की ज़मीन है?"
+  text_mr: "कुटुंबाच्या नावावर शेतजमीन आहे का?"
+  type: yes_no
+  fields: [owns_cultivable_land]
+
+- id: land_before_2019
+  text_en: "Was the land in the family's name before February 2019?"
+  text_hi: "क्या ज़मीन फरवरी 2019 से पहले परिवार के नाम पर थी?"
+  text_mr: "जमीन फेब्रुवारी 2019 पूर्वी कुटुंबाच्या नावावर होती का?"
+  type: yes_no
+  fields: [land_owned_before_2019_02_01]
+  only_if: {owns_cultivable_land: true}
+
+- id: exclusions
+  text_en: "Does anyone in the family pay income tax, hold a government job (above Group D), get a pension of Rs 10,000+ a month, work as a registered doctor/lawyer/engineer/CA, or hold an elected post? Or is the land owned by a trust or company?"
+  text_hi: "क्या परिवार में कोई आयकर भरता है, सरकारी नौकरी (ग्रुप D से ऊपर) में है, ₹10,000+ पेंशन पाता है, पंजीकृत डॉक्टर/वकील/इंजीनियर/CA है, या किसी चुने हुए पद पर है? या ज़मीन किसी ट्रस्ट या कंपनी के नाम पर है?"
+  text_mr: "कुटुंबातील कोणी आयकर भरतो, सरकारी नोकरीत (ग्रुप D पेक्षा वर) आहे, ₹10,000+ पेन्शन घेतो, नोंदणीकृत डॉक्टर/वकील/इंजिनिअर/CA आहे, किंवा निवडून आलेल्या पदावर आहे का? किंवा जमीन एखाद्या ट्रस्ट किंवा कंपनीच्या नावावर आहे का?"
+  type: yes_no
+  fields: [family_income_tax_payer, family_govt_employee_excluded, family_registered_professional, family_constitutional_or_elected_post, family_monthly_pension_inr, is_institutional_landholder]
+  # "no" clears every exclusion at once. "yes" needs a follow-up in the agent to find which one.
+  on_no: {family_income_tax_payer: false, family_govt_employee_excluded: false, family_registered_professional: false, family_constitutional_or_elected_post: false, family_monthly_pension_inr: 0, is_institutional_landholder: false}
+  only_if: {owns_cultivable_land: true}
+
+- id: already_receiving
+  text_en: "Is anyone else in the family already getting PM-KISAN?"
+  text_hi: "क्या परिवार में कोई और पहले से PM-KISAN पा रहा है?"
+  text_mr: "कुटुंबातील दुसरे कोणी आधीच PM-KISAN घेत आहे का?"
+  type: yes_no
+  fields: [family_member_already_receiving]
+  only_if: {owns_cultivable_land: true}
+
+- id: bpl
+  text_en: "Does the family have a BPL (yellow / Antyodaya) ration card?"
+  text_hi: "क्या परिवार के पास BPL (पीला / अंत्योदय) राशन कार्ड है?"
+  text_mr: "कुटुंबाकडे BPL (पिवळे / अंत्योदय) रेशन कार्ड आहे का?"
+  type: yes_no
+  fields: [is_bpl]
+
+- id: pmjay_list
+  text_en: "Is your family in the Ayushman Bharat list? You can check on beneficiary.nha.gov.in with your mobile number."
+  text_hi: "क्या आपका परिवार आयुष्मान भारत सूची में है? beneficiary.nha.gov.in पर मोबाइल नंबर से देख सकते हैं।"
+  text_mr: "तुमचे कुटुंब आयुष्मान भारत यादीत आहे का? beneficiary.nha.gov.in वर मोबाईल नंबरने तपासू शकता."
+  type: yes_no
+  fields: [in_pmjay_beneficiary_list]
+
+# ---- Basic profile questions used by the conversation (python -m saathi) before web discovery.
+# The curated schemes have no rules on these fields, so demo.py never picks them.
+# type "choice"/"text": the answer is parsed by the LLM extractor and validated against fields.yaml.
+
+- id: state
+  text_en: "Which state do you live in?"
+  text_hi: "आप किस राज्य में रहते हैं?"
+  text_mr: "तुम्ही कोणत्या राज्यात राहता?"
+  type: choice
+  fields: [state]
+
+- id: gender
+  text_en: "Is the person a man, a woman, or transgender?"
+  text_hi: "व्यक्ति पुरुष हैं, महिला हैं या ट्रांसजेंडर?"
+  text_mr: "व्यक्ती पुरुष आहे, स्त्री आहे की ट्रान्सजेंडर?"
+  type: choice
+  fields: [gender]
+
+- id: occupation
+  text_en: "What work do you mainly do? (for example farming, farm labour, construction, small business, job, student, homemaker)"
+  text_hi: "आप मुख्य रूप से क्या काम करते हैं? (जैसे खेती, खेत मज़दूरी, निर्माण कार्य, छोटा व्यवसाय, नौकरी, पढ़ाई, गृहिणी)"
+  text_mr: "तुम्ही मुख्यतः कोणते काम करता? (उदा. शेती, शेतमजुरी, बांधकाम, छोटा व्यवसाय, नोकरी, शिक्षण, गृहिणी)"
+  type: choice
+  fields: [occupation]
+
+- id: income
+  text_en: "Roughly how much does the whole family earn in a year, in rupees?"
+  text_hi: "पूरे परिवार की सालाना कमाई लगभग कितने रुपये है?"
+  text_mr: "संपूर्ण कुटुंबाचे वार्षिक उत्पन्न साधारण किती रुपये आहे?"
+  type: number
+  fields: [annual_family_income_inr]
+
+- id: category
+  text_en: "Which category are you in: SC, ST, OBC, EWS or General?"
+  text_hi: "आप किस वर्ग में आते हैं: SC, ST, OBC, EWS या सामान्य?"
+  text_mr: "तुम्ही कोणत्या प्रवर्गात आहात: SC, ST, OBC, EWS की खुला?"
+  type: choice
+  fields: [social_category]
+
+- id: marital
+  text_en: "Are you married, unmarried, widowed, divorced or separated?"
+  text_hi: "आप विवाहित, अविवाहित, विधवा/विधुर, तलाकशुदा या अलग रह रहे हैं?"
+  text_mr: "तुम्ही विवाहित, अविवाहित, विधवा/विधुर, घटस्फोटित की विभक्त आहात?"
+  type: choice
+  fields: [marital_status]
+
+- id: disability
+  text_en: "Do you have a disability certificate? If yes, what percentage does it show? (say 0 if none)"
+  text_hi: "क्या आपके पास विकलांगता प्रमाणपत्र है? हाँ तो उसमें कितने प्रतिशत लिखा है? (नहीं तो 0 कहें)"
+  text_mr: "तुमच्याकडे अपंगत्व प्रमाणपत्र आहे का? असल्यास त्यावर किती टक्के आहे? (नसल्यास 0 सांगा)"
+  type: number
+  fields: [disability_percent]

@@ -1,0 +1,81 @@
+# Maharashtra source map seed: where lesser-known schemes are published.
+# `python -m ingest --probe-sources mh` checks every candidate domain (homepage reachable + robots.txt)
+# and writes the usable ones to sources_mh.resolved.yaml. Never edit the resolved file by hand.
+#
+# agency_type: state_department | district | welfare_board | corporation | portal
+# Candidate domains are guesses until probed; wrong ones are simply dropped.
+
+state: maharashtra
+
+# Official sites outside *.gov.in / *.nic.in that are still government bodies (allowed as rule sources).
+extra_official_domains: [mahabocw.in, mahaswayam.gov.in, wcdcommpune.com]
+
+agencies:
+  - {name: "Social Justice and Special Assistance Department", type: state_department, needs: [sc, disability, senior, widow, education], candidates: [sjsa.maharashtra.gov.in]}
+  - {name: "Tribal Development Department", type: state_department, needs: [st, education, livelihood], candidates: [tribal.maharashtra.gov.in, mahatribal.gov.in]}
+  - {name: "Women and Child Development Department", type: state_department, needs: [women, girl, widow, maternity], candidates: [womenchild.maharashtra.gov.in, wcdcommpune.com]}
+  - {name: "Minority Development Department", type: state_department, needs: [minority, education], candidates: [mdd.maharashtra.gov.in]}
+  - {name: "Agriculture Department", type: state_department, needs: [farmer], candidates: [krishi.maharashtra.gov.in]}
+  - {name: "Animal Husbandry Department", type: state_department, needs: [farmer, livelihood], candidates: [ahd.maharashtra.gov.in]}
+  - {name: "Fisheries Department", type: state_department, needs: [fisher], candidates: [fisheries.maharashtra.gov.in]}
+  - {name: "Other Backward Bahujan Welfare Department", type: state_department, needs: [obc, education], candidates: [obcbahujankalyan.maharashtra.gov.in, mahaobc.maharashtra.gov.in]}
+  - {name: "VJNT Welfare (Vimukta Jati and Nomadic Tribes)", type: state_department, needs: [obc, education], candidates: [vjnt.maharashtra.gov.in]}
+  - {name: "Skill, Employment and Entrepreneurship Department", type: state_department, needs: [youth, livelihood], candidates: [mahaswayam.gov.in, rojgar.mahaswayam.gov.in]}
+  - {name: "Public Health Department", type: state_department, needs: [health], candidates: [arogya.maharashtra.gov.in]}
+  - {name: "Rural Development Department", type: state_department, needs: [housing, livelihood], candidates: [rdd.maharashtra.gov.in]}
+  - {name: "Housing Department", type: state_department, needs: [housing], candidates: [housing.maharashtra.gov.in]}
+  - {name: "School Education Department", type: state_department, needs: [education], candidates: [education.maharashtra.gov.in]}
+  - {name: "Higher and Technical Education Department", type: state_department, needs: [education], candidates: [htedu.maharashtra.gov.in]}
+  - {name: "Building and Other Construction Workers Welfare Board", type: welfare_board, needs: [construction], candidates: [mahabocw.in]}
+  - {name: "Mahatma Phule Backward Class Development Corporation", type: corporation, needs: [sc, livelihood], candidates: [mpbcdc.maharashtra.gov.in]}
+  - {name: "Annabhau Sathe Development Corporation", type: corporation, needs: [sc, livelihood], candidates: [lasdc.maharashtra.gov.in]}
+  - {name: "Vasantrao Naik Vimukta Jati and Nomadic Tribes Development Corporation", type: corporation, needs: [obc, livelihood], candidates: [vjnt.org.in, vnvjntdc.maharashtra.gov.in]}
+  - {name: "Maulana Azad Minorities Financial Development Corporation", type: corporation, needs: [minority, livelihood], candidates: [mamfdc.maharashtra.gov.in]}
+  - {name: "Mahatma Jyotiba Phule Jan Arogya Yojana", type: portal, needs: [health], candidates: [jeevandayee.gov.in]}
+  - {name: "MahaDBT", type: portal, needs: [farmer, education, scholarship], candidates: [mahadbt.maharashtra.gov.in]}
+
+# District-level sources: Zilla Parishad and district collector portals (many on S3WaaS with /en/scheme/ pages).
+# {d} is replaced by each district key and its aliases.
+district_candidates: ["zp{d}.maharashtra.gov.in", "zp{d}.gov.in", "{d}.gov.in", "{d}.nic.in"]
+
+districts:
+  ahmednagar: {aliases: [ahilyanagar], zp: true}
+  akola: {zp: true}
+  amravati: {zp: true}
+  aurangabad: {aliases: [chhatrapati_sambhajinagar, sambhajinagar], zp: true}
+  beed: {zp: true}
+  bhandara: {zp: true}
+  buldhana: {zp: true}
+  chandrapur: {zp: true}
+  dhule: {zp: true}
+  gadchiroli: {zp: true}
+  gondia: {zp: true}
+  hingoli: {zp: true}
+  jalgaon: {zp: true}
+  jalna: {zp: true}
+  kolhapur: {zp: true}
+  latur: {zp: true}
+  mumbai_city: {aliases: [mumbaicity], zp: false}
+  mumbai_suburban: {aliases: [mumbaisuburban], zp: false}
+  nagpur: {zp: true}
+  nanded: {zp: true}
+  nandurbar: {zp: true}
+  nashik: {zp: true}
+  osmanabad: {aliases: [dharashiv], zp: true}
+  palghar: {zp: true}
+  parbhani: {zp: true}
+  pune: {zp: true}
+  raigad: {zp: true}
+  ratnagiri: {zp: true}
+  sangli: {zp: true}
+  satara: {zp: true}
+  sindhudurg: {zp: true}
+  solapur: {zp: true}
+  thane: {zp: true}
+  wardha: {zp: true}
+  washim: {zp: true}
+  yavatmal: {zp: true}
+
+# Words that mark a link as a scheme page or a scheme listing (English, Marathi, Hindi).
+scheme_link_words: [scheme, schemes, yojana, yojna, योजना, अनुदान, शिष्यवृत्ती, अर्थसहाय्य, scholarship,
+                    subsidy, assistance, pension, welfare, कल्याण, निवृत्तीवेतन]

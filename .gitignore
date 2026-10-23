@@ -1,0 +1,11 @@
+__pycache__/
+*.pyc
+.env
+.venv/
+.pytest_cache/
+logs/
+cache/
+# the scheme database is committed (it is hours of scraping); its scratch files are not
+data/*.db-wal
+data/*.db-shm
+data/export/

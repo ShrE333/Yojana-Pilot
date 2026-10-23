@@ -1,0 +1,138 @@
+# PM-KISAN Samman Nidhi
+# Rules follow the PM-KISAN Operational Guidelines and FAQ on pmkisan.gov.in.
+# Re-verify against the official PDFs before any demo and update last_verified.
+
+id: pm_kisan
+name: PM-KISAN Samman Nidhi
+name_hi: प्रधानमंत्री किसान सम्मान निधि
+name_mr: प्रधानमंत्री किसान सन्मान निधी
+source_url: https://pmkisan.gov.in/Documents/RevisedFAQ.pdf
+other_sources:
+  - https://pmkisan.gov.in/
+  - https://PMkisan.gov.in/Documents/OPERATIONAL GUIDELINES.pdf
+last_verified: 2026-10-21
+benefit_summary: "Rs 6,000 per year to the farmer family, paid in 3 instalments of Rs 2,000"
+benefit_annual_inr: 6000
+
+# Used by ranking: higher value_score = more useful, higher effort = harder to finish.
+rank:
+  value_score: 4
+  effort: 3
+
+eligibility:
+  all:
+    - field: owns_cultivable_land
+      op: eq
+      value: true
+      reason: "Only families who own cultivable land in their name are covered"
+    - field: land_owned_before_2019_02_01
+      op: eq
+      value: true
+      reason: "Land must have been owned on the cut-off date 01-02-2019 (inheritance is an exception; verify)"
+    - field: is_institutional_landholder
+      op: eq
+      value: false
+      reason: "Institutional landholders are excluded"
+    - field: family_income_tax_payer
+      op: eq
+      value: false
+      reason: "Families where a member paid income tax in the last assessment year are excluded"
+    - field: family_constitutional_or_elected_post
+      op: eq
+      value: false
+      reason: "Families of present/former constitutional post holders, ministers, MPs, MLAs, mayors and district panchayat chairpersons are excluded"
+    - field: family_govt_employee_excluded
+      op: eq
+      value: false
+      reason: "Serving/retired govt or PSU officers are excluded (except MTS / Class IV / Group D)"
+    - field: family_monthly_pension_inr
+      op: lt
+      value: 10000
+      reason: "Retired pensioners with monthly pension of Rs 10,000 or more are excluded (except MTS / Class IV / Group D)"
+    - field: family_registered_professional
+      op: eq
+      value: false
+      reason: "Practising registered doctors, engineers, lawyers, CAs and architects are excluded"
+    - field: family_member_already_receiving
+      op: eq
+      value: false
+      reason: "Only one member of a family can receive PM-KISAN"
+
+# Things that must all be true for money to actually arrive.
+dependencies:
+  - id: ekyc_done
+    label: "e-KYC completed"
+    fix: complete_ekyc
+  - id: land_record_seeded
+    label: "Land records verified and seeded on the portal"
+    fix: land_seeding
+  - id: bank_aadhaar_npci_seeded
+    label: "Bank account linked to Aadhaar in NPCI mapper (DBT enabled)"
+    fix: npci_seeding
+  - id: bank_account_active
+    label: "Bank account active"
+    fix: reactivate_account
+
+documents:
+  - {name: "Aadhaar card", issued_by: "UIDAI / Aadhaar Seva Kendra", key: aadhaar}
+  - {name: "7/12 extract or land record", issued_by: "Talathi / revenue office", key: land_record}
+  - {name: "Bank passbook", issued_by: "Your bank branch", key: bank_passbook}
+
+# Records whose name/DOB must agree for payment to go through.
+records_to_match:
+  - [aadhaar, land_record]
+  - [aadhaar, bank_passbook]
+
+actions:
+  complete_ekyc:
+    text: "Complete e-KYC: OTP e-KYC on the PM-KISAN portal, or biometric e-KYC at the nearest CSC"
+    where: "pmkisan.gov.in (Farmers Corner) or CSC"
+  land_seeding:
+    text: "Ask the talathi / agriculture office to verify and seed your land record on PM-KISAN"
+    where: "Talathi office or taluka agriculture office"
+  npci_seeding:
+    text: "Ask your bank to link the account to Aadhaar for DBT (NPCI mapper). e-KYC alone does not do this"
+    where: "Your bank branch, or open an IPPB account at the post office"
+  reactivate_account:
+    text: "Reactivate the bank account (do a small deposit/withdrawal or update KYC at the branch)"
+    where: "Your bank branch"
+  fix_name_mismatch:
+    text: "Correct the name so it is spelled the same on Aadhaar, the land record and the bank account"
+    where: "Talathi office (7/12), Aadhaar Seva Kendra (Aadhaar), bank branch (passbook)"
+  check_exclusion:
+    text: "Check whether the family falls under an exclusion (income tax, govt job, pension, land after 2019); if not, file a grievance"
+    where: "pmkisan.gov.in Know Your Status, Kisan e-Mitra, or the district agriculture office"
+  wait_for_state_approval:
+    text: "Your application is waiting for state verification. Ask the taluka agriculture office to check it"
+    where: "Taluka agriculture office"
+  file_grievance:
+    text: "File a grievance on the PM-KISAN portal or call the helpline"
+    where: "pmkisan.gov.in grievance section / helpline 155261 or 011-24300606 (verify numbers)"
+
+# Portal status -> ranked likely causes. weight = how likely, before looking at the user's data.
+# `boost_if` raises a cause when the pre-flight check found that problem.
+status_map:
+  "ekyc pending":
+    - {action: complete_ekyc, weight: 0.6}
+    - {action: fix_name_mismatch, weight: 0.3, boost_if: name_mismatch}
+    - {action: npci_seeding, weight: 0.1}
+  "payment failed":
+    - {action: npci_seeding, weight: 0.45, boost_if: npci_not_seeded}
+    - {action: fix_name_mismatch, weight: 0.3, boost_if: name_mismatch}
+    - {action: reactivate_account, weight: 0.25, boost_if: account_inactive}
+  "aadhaar not seeded":
+    - {action: npci_seeding, weight: 0.7}
+    - {action: fix_name_mismatch, weight: 0.3, boost_if: name_mismatch}
+  "land seeding no":
+    - {action: land_seeding, weight: 0.7}
+    - {action: fix_name_mismatch, weight: 0.3, boost_if: name_mismatch}
+  "rejected":
+    - {action: check_exclusion, weight: 0.5}
+    - {action: fix_name_mismatch, weight: 0.3, boost_if: name_mismatch}
+    - {action: file_grievance, weight: 0.2}
+  "pending for approval by state":
+    - {action: wait_for_state_approval, weight: 0.7}
+    - {action: land_seeding, weight: 0.3}
+  "withheld":
+    - {action: check_exclusion, weight: 0.6}
+    - {action: file_grievance, weight: 0.4}

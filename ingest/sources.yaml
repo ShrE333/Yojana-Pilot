@@ -1,0 +1,26 @@
+# Where scheme rules may be scraped from, and where not. Checked 2026-10-22.
+# The fetcher refuses blocked domains and any URL disallowed by that site's robots.txt.
+
+blocked_domains:
+  myscheme.gov.in:
+    reason: >-
+      robots.txt allows all, but the Terms of Use (myscheme.gov.in/terms-of-use) say:
+      "The use of any software (e.g. bots, scraper tools) or other automatic devices to access,
+      monitor, or copy the platform pages is prohibited unless expressly authorized by the
+      myScheme in writing." Do not fetch until written permission exists.
+  india.gov.in:
+    reason: Returns "Access Denied" to automated requests (even robots.txt). Not bypassed.
+
+# Rules may only come from official government domains.
+official_suffixes: [".gov.in", ".nic.in"]
+
+# Search queries exclude blocked sites and prefer official ones.
+search_suffix: "site:gov.in OR site:nic.in -site:myscheme.gov.in -site:india.gov.in"
+
+fetch:
+  user_agent: "SchemeSaathiBot/0.1 (research prototype; respects robots.txt)"
+  min_seconds_between_requests_per_domain: 2
+  timeout_seconds: 25
+  max_bytes: 8000000
+  max_text_chars: 60000
+  cache_days: 30

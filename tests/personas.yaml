@@ -1,0 +1,96 @@
+# Synthetic personas with hand-labelled expected outcomes.
+# Write the expected answer BEFORE running the engine. Add more as schemes are added.
+# expected: {scheme_id: status}, start_with: scheme expected first (or null)
+
+- id: p01_small_farmer
+  note: "Typical small farmer, 45, owns land since 2010, no exclusions, not BPL"
+  profile: {age: 45, owns_cultivable_land: true, land_owned_before_2019_02_01: true, is_institutional_landholder: false,
+            family_income_tax_payer: false, family_constitutional_or_elected_post: false, family_govt_employee_excluded: false,
+            family_monthly_pension_inr: 0, family_registered_professional: false, family_member_already_receiving: false,
+            is_bpl: false, in_pmjay_beneficiary_list: false}
+  expected: {pm_kisan: eligible, ignoaps: ineligible, pmjay: ineligible}
+  start_with: pm_kisan
+
+- id: p02_bpl_elder_farmer
+  note: "72-year-old BPL farmer: all three"
+  profile: {age: 72, owns_cultivable_land: true, land_owned_before_2019_02_01: true, is_institutional_landholder: false,
+            family_income_tax_payer: false, family_constitutional_or_elected_post: false, family_govt_employee_excluded: false,
+            family_monthly_pension_inr: 0, family_registered_professional: false, family_member_already_receiving: false,
+            is_bpl: true, in_pmjay_beneficiary_list: false}
+  expected: {pm_kisan: eligible, ignoaps: eligible, pmjay: eligible}
+  start_with: pmjay
+
+- id: p03_tax_payer
+  note: "Owns land but son pays income tax"
+  profile: {age: 50, owns_cultivable_land: true, land_owned_before_2019_02_01: true, is_institutional_landholder: false,
+            family_income_tax_payer: true, family_constitutional_or_elected_post: false, family_govt_employee_excluded: false,
+            family_monthly_pension_inr: 0, family_registered_professional: false, family_member_already_receiving: false,
+            is_bpl: false, in_pmjay_beneficiary_list: false}
+  expected: {pm_kisan: ineligible, ignoaps: ineligible, pmjay: ineligible}
+  start_with: null
+
+- id: p04_land_after_cutoff
+  note: "Bought land in 2021"
+  profile: {age: 38, owns_cultivable_land: true, land_owned_before_2019_02_01: false, is_institutional_landholder: false,
+            family_income_tax_payer: false, family_constitutional_or_elected_post: false, family_govt_employee_excluded: false,
+            family_monthly_pension_inr: 0, family_registered_professional: false, family_member_already_receiving: false,
+            is_bpl: true, in_pmjay_beneficiary_list: true}
+  expected: {pm_kisan: ineligible, ignoaps: ineligible, pmjay: eligible}
+  start_with: pmjay
+
+- id: p05_landless_bpl_widow_61
+  note: "Landless BPL widow, 61"
+  profile: {age: 61, owns_cultivable_land: false, is_bpl: true, in_pmjay_beneficiary_list: false}
+  expected: {pm_kisan: ineligible, ignoaps: eligible, pmjay: ineligible}
+  start_with: ignoaps
+
+- id: p06_near_miss_age_58
+  note: "BPL, 58: two years short of the pension"
+  profile: {age: 58, owns_cultivable_land: false, is_bpl: true, in_pmjay_beneficiary_list: false}
+  expected: {pm_kisan: ineligible, ignoaps: near_miss, pmjay: ineligible}
+  start_with: null
+
+- id: p07_retired_pensioner
+  note: "Retired clerk with Rs 18,000 monthly pension who owns land"
+  profile: {age: 66, owns_cultivable_land: true, land_owned_before_2019_02_01: true, is_institutional_landholder: false,
+            family_income_tax_payer: false, family_constitutional_or_elected_post: false, family_govt_employee_excluded: false,
+            family_monthly_pension_inr: 18000, family_registered_professional: false, family_member_already_receiving: false,
+            is_bpl: false, in_pmjay_beneficiary_list: false}
+  expected: {pm_kisan: ineligible, ignoaps: ineligible, pmjay: ineligible}
+  start_with: null
+
+- id: p08_wife_already_receiving
+  note: "Husband applying but wife already gets PM-KISAN"
+  profile: {age: 47, owns_cultivable_land: true, land_owned_before_2019_02_01: true, is_institutional_landholder: false,
+            family_income_tax_payer: false, family_constitutional_or_elected_post: false, family_govt_employee_excluded: false,
+            family_monthly_pension_inr: 0, family_registered_professional: false, family_member_already_receiving: true,
+            is_bpl: false, in_pmjay_beneficiary_list: false}
+  expected: {pm_kisan: ineligible, ignoaps: ineligible, pmjay: ineligible}
+  start_with: null
+
+- id: p09_only_age_known
+  note: "Only age known: everything should still need info except clear fails"
+  profile: {age: 40}
+  expected: {pm_kisan: needs_info, ignoaps: ineligible, pmjay: needs_info}
+  start_with: null
+
+- id: p10_rich_senior_75
+  note: "Wealthy 75-year-old, no land, not BPL: PM-JAY 70+ covers irrespective of income"
+  profile: {age: 75, owns_cultivable_land: false, is_bpl: false, in_pmjay_beneficiary_list: false}
+  expected: {pm_kisan: ineligible, ignoaps: ineligible, pmjay: eligible}
+  start_with: pmjay
+
+- id: p11_age_69_not_listed
+  note: "69, not in list: PM-JAY near miss by one year"
+  profile: {age: 69, owns_cultivable_land: false, is_bpl: false, in_pmjay_beneficiary_list: false}
+  expected: {pm_kisan: ineligible, ignoaps: ineligible, pmjay: near_miss}
+  start_with: null
+
+- id: p12_institutional
+  note: "Land held by a temple trust"
+  profile: {age: 55, owns_cultivable_land: true, land_owned_before_2019_02_01: true, is_institutional_landholder: true,
+            family_income_tax_payer: false, family_constitutional_or_elected_post: false, family_govt_employee_excluded: false,
+            family_monthly_pension_inr: 0, family_registered_professional: false, family_member_already_receiving: false,
+            is_bpl: false, in_pmjay_beneficiary_list: false}
+  expected: {pm_kisan: ineligible, ignoaps: ineligible, pmjay: ineligible}
+  start_with: null
