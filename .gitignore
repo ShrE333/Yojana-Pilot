@@ -1,11 +1,67 @@
-__pycache__/
-*.pyc
+# Private configuration (only the empty template is publishable)
 .env
+.env.*
+!.env.example
+.secrets/
+secrets/
+.aws/
+credentials*.json
+service-account*.json
+*.pem
+*.key
+*.p12
+*.pfx
+
+# Local Python environments and generated caches
 .venv/
+.venv*/
+venv/
+env/
+.tox/
+.nox/
+__pycache__/
+*.py[cod]
 .pytest_cache/
+.ruff_cache/
+.mypy_cache/
+*.egg-info/
+build/
+dist/
+
+# Runtime output and citizen data
 logs/
+*.log
 cache/
-# the scheme database is committed (it is hours of scraping); its scratch files are not
-data/*.db-wal
-data/*.db-shm
+uploads/
+user_data/
+citizen_data/
+sessions/
+*.db
+*.db-*
+*.sqlite
+*.sqlite3
+*.sqlite-*
+*.sqlite3-*
+# Reviewed public scheme catalog is required for offline operation.
+!data/schemes.db
 data/export/
+
+# Test/browser/evaluation output
+.coverage
+.coverage.*
+coverage.xml
+htmlcov/
+test-results/
+playwright-report/
+artifacts/
+eval_results/
+
+# Installer snapshots, downloads and scratch work
+*.bak
+*.orig
+*.rej
+*.tmp
+*.v2-backup.*
+downloads/
+tmp/
+temp/

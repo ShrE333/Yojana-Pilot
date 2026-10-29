@@ -1,5 +1,7 @@
 # CLAUDE.md: Scheme Saathi
 
+Current product scope includes the public website, citizen dashboard, Rescue APIs and opt-in WAHA adapter. Later user instructions and README.md supersede the historical no-UI/no-WhatsApp scope below; the deterministic-engine and data-safety contracts still apply.
+
 Read this whole file before changing anything. Then read `PROGRESS.md` to see what has been done so far.
 
 ---

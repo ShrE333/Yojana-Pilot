@@ -166,7 +166,8 @@ def test_scheme_transparency_endpoint(client):
 
 def test_page_is_served(client):
     r = client.get("/")
-    assert r.status_code == 200 and "Scheme Saathi" in r.text
+    assert r.status_code == 200 and 'data-site="public-landing"' in r.text
+    assert 'id="profile-form"' not in r.text
     assert client.get("/static/app.js").status_code == 200
 
 

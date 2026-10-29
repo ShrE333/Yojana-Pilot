@@ -1,6 +1,6 @@
-# Scheme Saathi
+# Yojana-Pilot
 
-**Finds the government welfare schemes a person is missing — especially the ones nobody has heard of.**
+**A public civic-tech website and citizen workspace for scheme discovery, eligibility guidance and application-blocker investigation.**
 
 A person tells us a few things about themselves, in Hindi, Marathi or English. We search official
 government websites, work out which schemes they qualify for, and rank them by what each one is
@@ -37,45 +37,83 @@ Two supporting rules follow from it:
 | Eligibility rules | 496 |
 | Official sites mapped | 45 Maharashtra departments and Zilla Parishads |
 | Scheme pages found | 920 (526 still waiting to be read) |
-| Tests | **215, all offline** (no network, no API keys needed) |
+| Tests | **237 passing, all offline** (no network, no API keys needed) |
 
-**Honest status.** The engine, the database and the scraper are solid and tested. The web interface
-and the reasoning loop are **built but have only ever run against a mock model** — expect to spend an
-hour fixing prompts the first time you run them for real. None of the 264 scraped schemes has been
-checked by a human yet. See [What is left to build](#what-is-left-to-build).
+**Verified status.** Public landing page, citizen dashboard, Rescue Mode, conversation API and WAHA adapter are integrated. The offline suite and desktop/mobile browser checks pass. Model extraction requires your configured provider; hosted-model and external WhatsApp delivery are not part of the offline validation. Scraped rules remain unverified until reviewed. This is independent guidance, not a government service.
+
+| Route | Purpose |
+| --- | --- |
+| `/` | Public landing page, English / Hindi / Marathi |
+| `/app` | Citizen dashboard and conversation workspace |
+| `/chat` | Redirect to `/app` |
+| `/legacy` | Original form, investigation and streaming results |
+| `/docs` | FastAPI API documentation |
+
+See [website architecture](docs/WEBSITE_ARCHITECTURE.md), [dashboard details](docs/DASHBOARD_V22.md) and [security and data handling](SECURITY.md).
 
 ---
 
 ## Quick start
 
-```bash
-pip install -r requirements.txt
-cp .env.example .env          # then add your keys (see below)
-python -m web                 # open http://localhost:8000
-```
+Install a standard Python 3.13 from [python.org](https://www.python.org/downloads/), then clone the published `main` branch. No private agent runtime is required.
 
-On Windows you can double-click `start.bat`, or:
+### Windows PowerShell
 
 ```powershell
-.\start.ps1            # web page at http://localhost:8000
-.\start.ps1 -Cli       # terminal chat instead
-.\start.ps1 -Test      # run the test suite
-.\start.ps1 -Stats     # how many schemes are in the database
+git clone --branch main https://github.com/ShrE333/Yojana-Pilot.git
+Set-Location Yojana-Pilot
+py -3.13 -m venv .venv
+.\.venv\Scripts\python.exe -m pip install -r requirements.lock.txt
+Copy-Item .env.example .env
+.\.venv\Scripts\python.exe -m pytest -q
+.\.venv\Scripts\python.exe -m web --no-browser
 ```
 
-`start.ps1` checks Python, creates `.env` if missing, installs packages on first run, and switches the
-console to UTF-8 so Devanagari displays correctly.
+If `py` is not available, use `python -m venv .venv` with your installed Python. Open http://127.0.0.1:8000/ for the public site and http://127.0.0.1:8000/app for the workspace. No model key is required to view the website, run tests, or use deterministic Rescue checks. Configure your model only when you want live conversation.
+
+### macOS / Linux
+
+```bash
+git clone --branch main https://github.com/ShrE333/Yojana-Pilot.git
+cd Yojana-Pilot
+python3.13 -m venv .venv
+.venv/bin/python -m pip install -r requirements.lock.txt
+cp .env.example .env
+.venv/bin/python -m pytest -q
+.venv/bin/python -m web --no-browser
+```
+
+Never replace an existing `.env` containing your configuration. Virtual environments are disposable and machine-specific; recreate them if their base Python no longer exists.
+
+The Windows launchers use `.venv\Scripts\python.exe` explicitly:
+
+```powershell
+.\start.ps1            # public website; dashboard at /app
+.\start.ps1 -Cli       # terminal chat
+.\start.ps1 -Test      # offline suite
+.\start.ps1 -Stats     # catalog summary
+```
+
+### Optional browser and security checks
+
+```powershell
+.\.venv\Scripts\python.exe -m pip install -r requirements-dev.txt
+.\.venv\Scripts\python.exe -m playwright install chromium
+.\.venv\Scripts\python.exe scripts/check_dashboard_browser.py
+```
+
+Run browser checks in a second terminal while the backend is running. Set `DASHBOARD_URL` for a different port or `BROWSER_EXECUTABLE` to select an existing browser. Screenshots are written to ignored `artifacts/browser/`.
 
 ### Keys you need
 
-You need **one** LLM key to run the app. The database already ships with 267 schemes, so you do not
+You need **one** configured language service for live AI conversation; the public website and offline engine run without keys. The database already ships with 267 schemes, so you do not
 need to scrape anything to try it.
 
 | Key | Used for | Notes |
 |---|---|---|
-| `GEMINI_API_KEY` | reading scheme pages, planning | [aistudio.google.com/apikey](https://aistudio.google.com/apikey), free tier is generous |
-| `OPENAI_API_KEY` + `OPENAI_BASE_URL` | chat replies | Works with Groq (free): `https://api.groq.com/openai/v1` |
-| `SERPAPI_API_KEY` | live web search | Only needed for finding *new* schemes. 250 searches/month free |
+| `GEMINI_API_KEY` | reading scheme pages, planning | [Provider key dashboard](https://aistudio.google.com/apikey); check current quotas |
+| `OPENAI_API_KEY` + `OPENAI_BASE_URL` | chat replies | Compatible with configured providers, for example: `https://api.groq.com/openai/v1` |
+| `SERPAPI_API_KEY` | live web search | Only needed for finding *new* schemes. Check current provider quotas |
 | `ANTHROPIC_API_KEY` | optional alternative | |
 
 Models are chosen per **role**, so you can mix providers:
@@ -95,7 +133,11 @@ for ten minutes).
 
 ## How it works
 
-### A person's session
+### Main citizen workspace (`/app`)
+
+A free-text message goes to `/api/v2/conversation`, profile facts are validated, deterministic rules generate a shortlist, and relevant missing eligibility facts drive follow-up questions. Scheme cards show sources and verification warnings. Rescue Mode calls the separate deterministic preflight and status-interpretation APIs.
+
+### Legacy investigation flow (`/legacy`)
 
 ```
 Browser: form (state, district, age, gender, income, caste, work ...)
@@ -231,11 +273,11 @@ ingest/        source_map.py (45 mapped sites), fetch.py (robots, cache, HTML/PD
 discovery/     search.py (SerpAPI/Tavily), catalog.py, discover.py
 saathi/        the conversation: understand.py, investigator.py, questioner.py,
                shortlist.py, explain.py, chat.py
-web/           FastAPI app + a single static page (form, live investigation, results)
+web/           FastAPI APIs, public landing page, citizen dashboard and preserved legacy form
 llm/           swappable providers: anthropic / openai-compatible / gemini / local Ollama / mock
 schemes/       vocabulary and config only, NOT scheme data:
                fields.yaml (the 41 allowed fields), questions.yaml (en/hi/mr), flagship.yaml
-tests/         215 tests, all offline
+tests/         237 tests, all offline
 ```
 
 ### Where the schemes live
@@ -258,7 +300,7 @@ with the ranking and filtering fields indexed beside it.
 ## Testing
 
 ```bash
-python -m pytest -q      # 215 tests, no network, no keys required
+python -m pytest -q      # 237 tests, no network, no keys required
 python eval.py           # accuracy numbers
 python demo.py           # rules-only walkthrough, no LLM
 ```
@@ -276,15 +318,12 @@ regression protection, not proof of accuracy.
 
 Roughly in the order I would do it.
 
-1. **Run the web page live and fix what breaks.** Highest value and highest risk — everything a judge
-   sees goes through it, and it has only run against a mock model.
-2. **Connect the pre-flight check and status decoder.** Both are written and tested in `core/`, but
-   nothing in the UI calls them. The name-mismatch feature ("Aadhaar says Sunil, land record says
-   Suneel") is the project's strongest demo moment and is currently invisible.
-3. **Finish extraction.** 526 pages are queued. A few days on free quota, or one afternoon on a paid key.
-4. **Verify 10-15 schemes by hand** so you can say "these are checked" rather than "all unverified".
-5. **Build the evaluation set.** 20-30 Maharashtra personas with expected results, plus a
-   false-positive count. Without it we cannot claim accuracy.
+1. Validate live conversation prompts with a configured model and test deployment before public traffic.
+2. Add authentication, request limits, durable sessions and a background queue for production traffic.
+3. Review scraped catalog rules against current official sources before presenting them as verified.
+4. Validate WAHA delivery on an explicitly configured, opted-in test account.
+5. Implement and validate LiveKit voice assistance; current calling controls are placeholders.
+6. Expand independently labelled evaluation data; the small existing fixtures do not establish real-world accuracy.
 
 **Smaller gaps:** option values in the form still show in English in Hindi/Marathi mode; the catalog
 is Maharashtra-only (other states fall back to live search); about 1 in 5 pages yields no

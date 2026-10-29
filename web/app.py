@@ -1,9 +1,13 @@
-"""Scheme Saathi web app: FastAPI API + one static page.
+"""Scheme Saathi web app: FastAPI APIs, V2.2 dashboard and legacy form.
 
     python -m web            # http://localhost:8000
 
 Endpoints
-  GET  /                            the page
+  GET  /                            public landing page
+  GET  /app                         V2.2 citizen dashboard
+  GET  /chat                        compatibility redirect to /app
+  GET  /legacy                      original form interface
+  GET  /api/catalog                 catalog and Rescue workflow availability
   GET  /api/form                    form fields (from fields.yaml) + Maharashtra districts
   POST /api/sessions                {profile, lang, web} -> {id}; starts the investigation
   GET  /api/sessions/{id}/events    Server-Sent Events (?after=N to resume)
@@ -19,7 +23,7 @@ from pathlib import Path
 from typing import Any, Callable
 
 from fastapi import FastAPI, HTTPException
-from fastapi.responses import FileResponse, StreamingResponse
+from fastapi.responses import FileResponse, RedirectResponse, StreamingResponse
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel
 
@@ -30,6 +34,9 @@ from ingest.source_map import seed
 from llm import LLMError, get_llm
 
 from .session import WebSession
+from .conversation_api import router as conversation_router
+from .waha_bridge import router as waha_router
+from .rescue_api import router as rescue_router
 
 STATIC = Path(__file__).resolve().parent / "static"
 FORM_FIELDS = ["state", "district", "age", "gender", "marital_status", "social_category", "occupation",
@@ -64,6 +71,9 @@ def _try_llm(role: str):
 def create_app(planner=None, extractor=None, agent=None, discoverer_factory: Callable | None = None,
                catalog_loader: Callable[[], dict] = load_catalog, budget=None) -> FastAPI:
     app = FastAPI(title="Scheme Saathi")
+    app.include_router(conversation_router)
+    app.include_router(waha_router)
+    app.include_router(rescue_router)
     sessions: dict[str, WebSession] = {}
     llms: dict[str, Any] = {"planner": planner, "extractor": extractor, "agent": agent}
 
@@ -89,7 +99,27 @@ def create_app(planner=None, extractor=None, agent=None, discoverer_factory: Cal
 
     @app.get("/")
     def index():
+        return FileResponse(STATIC / "landing.html", headers={"Cache-Control": "no-cache"})
+
+    @app.get("/app")
+    def dashboard():
+        return FileResponse(STATIC / "chat.html", headers={"Cache-Control": "no-cache"})
+
+    @app.get("/chat")
+    def chat_redirect():
+        return RedirectResponse("/app", status_code=307)
+
+    @app.get("/legacy")
+    def legacy():
         return FileResponse(STATIC / "index.html")
+
+    @app.get("/api/catalog")
+    def catalog():
+        return [{"id": sid, "name": s["name"], "dependencies": [{"id": d["id"], "label": d["label"]} for d in (s.get("dependencies") or [])],
+                 "rescue_supported": bool(
+            s.get("actions") and s.get("dependencies") is not None
+            and (s.get("origin") != "discovered" or s.get("verified", False)))}
+            for sid, s in catalog_loader().items()]
 
     @app.get("/api/form")
     def form():

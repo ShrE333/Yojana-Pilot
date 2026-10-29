@@ -1,7 +1,7 @@
 <#
 Scheme Saathi launcher. Run from anywhere:
 
-    .\start.ps1                 web page at http://localhost:8000 (form + investigation + results)
+    .\start.ps1                 public site at http://localhost:8000; citizen workspace at /app
     .\start.ps1 -Cli            terminal chat instead of the web page
     .\start.ps1 -NoWeb          terminal chat using only saved schemes (no search credits used)
     .\start.ps1 -Crawl          crawl the Maharashtra department / Zilla Parishad sites first (no search credits)
@@ -40,41 +40,44 @@ $env:PYTHONUTF8 = "1"
 
 function Say($text, $color = "Cyan") { Write-Host $text -ForegroundColor $color }
 
-# 1. Python
-$python = Get-Command python -ErrorAction SilentlyContinue
-if ($null -eq $python) {
-    Say "Python was not found. Install Python 3.10+ from https://www.python.org and tick 'Add to PATH'." "Red"
+# 1. Use the project's explicit environment, never an unrelated global Python.
+$projectPython = Join-Path $PSScriptRoot '.venv\Scripts\python.exe'
+if (-not (Test-Path -LiteralPath $projectPython)) {
+    Say 'Create the project environment first: py -3.13 -m venv .venv; then install requirements.txt. See README.md.' 'Red'
     exit 1
 }
-
+& $projectPython --version
+if ($LASTEXITCODE -ne 0) {
+    Say 'The project environment is broken. Recreate it with a standard Python installation; see README.md.' 'Red'
+    exit 1
+}
 # 2. .env with keys
 if (-not (Test-Path ".env")) {
     Copy-Item ".env.example" ".env"
-    Say "Created .env from .env.example. Open .env, add your API keys, then run this again." "Yellow"
-    exit 1
+    Say "Created .env from .env.example. Configure a language service when you want live AI conversation. The public site and Rescue checks do not need model keys." "Yellow"
 }
 
 # 3. Packages (install only if something is missing)
-python -c "import yaml, rapidfuzz, dotenv, jsonschema, httpx, bs4, lxml, pypdf, openai, anthropic, google.genai, fastapi, uvicorn" 2>$null
+& $projectPython -c "import yaml, rapidfuzz, dotenv, jsonschema, httpx, bs4, lxml, pypdf, openai, anthropic, google.genai, fastapi, uvicorn" 2>$null
 if ($LASTEXITCODE -ne 0) {
     Say "Installing required packages (first run only)..."
-    python -m pip install -r requirements.txt
+    & $projectPython -m pip install -r requirements.lock.txt
     if ($LASTEXITCODE -ne 0) { Say "Package install failed. See the messages above." "Red"; exit 1 }
 }
 
 # 4. What to run
 if ($Test) {
     Say "Running tests..."
-    python -m pytest -q
+    & $projectPython -m pytest -q
     exit $LASTEXITCODE
 }
 if ($Stats) {
-    python -m ingest --stats
+    & $projectPython -m ingest --stats
     exit $LASTEXITCODE
 }
 if ($Update) {
     Say "Scraping official websites for $State + central schemes (up to $Searches searches)..."
-    python -m ingest --state $State --max-searches $Searches --max-pages ($Searches * 3)
+    & $projectPython -m ingest --state $State --max-searches $Searches --max-pages ($Searches * 3)
     if ($LASTEXITCODE -ne 0) { Say "Scraping stopped with an error; starting chat with saved schemes." "Yellow" }
 }
 
@@ -82,20 +85,20 @@ if ($Crawl) {
     $crawlArgs = @("-m", "ingest", "--source-map", "mh", "--max-sites", "45", "--pages-per-site", "12")
     if ($District -ne "") { $crawlArgs += @("--district", $District) }
     Say "Crawling Maharashtra department and Zilla Parishad sites (no search credits; LLM reads scheme pages)..."
-    python @crawlArgs
+    & $projectPython @crawlArgs
 }
 
 if (-not ($Cli -or $NoWeb -or $Debug)) {
-    python -m ingest --stats
+    & $projectPython -m ingest --stats
     Say "Starting the web page at http://localhost:8000 (Ctrl+C to stop)" "Green"
-    python -m web
+    & $projectPython -m web
     exit $LASTEXITCODE
 }
 
 $chatArgs = @("-m", "saathi")
 if ($NoWeb) { $chatArgs += "--no-web" }
 if ($Debug) { $chatArgs += "--debug" }
-python -m ingest --stats
+& $projectPython -m ingest --stats
 Say "Starting Scheme Saathi. Type 'quit' to exit." "Green"
-python @chatArgs
+& $projectPython @chatArgs
 exit $LASTEXITCODE
