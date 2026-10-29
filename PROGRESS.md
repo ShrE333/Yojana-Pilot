@@ -10,13 +10,13 @@ This file is the project's history, newest entry first. Read it top to bottom to
 
 | | |
 |---|---|
-| Version | v1.0 |
-| Last updated | 2026-10-23 |
-| Tests | 215 passed, 0 failed |
-| Phase | Web UI + investigator + scheme database. Maharashtra crawl running. Next: finish extraction, measure lesser-known recall |
-| Schemes | 46 in data/schemes.db ({'curated': 3, 'discovered': 43}); 814 pages queued for extraction |
+| Version | v2.3 consolidated website |
+| Last updated | 2026-10-29 |
+| Tests | 237 passed, 0 failed (standard Python 3.13) |
+| Phase | Public landing page, citizen dashboard, conversational API, Rescue and WAHA adapter; audited repository consolidation |
+| Schemes | 267 public scheme records; 1,008 crawl records; catalog preserved unchanged |
 | Eval | eligibility 36/36 on 12 personas; start-with 12/12; name matcher P=1.00 R=1.00 on 20 pairs (small self-labelled sets) |
-| Next task | Run the web UI live; finish extraction (528 queued); verify top schemes by hand |
+| Next task | V2.4 planning only after repository integration; live models, persistent case memory and WAHA remain unvalidated |
 
 ---
 
@@ -41,6 +41,60 @@ This file is the project's history, newest entry first. Read it top to bottom to
 
 **Next:** the next concrete step
 ```
+
+---
+
+## v2.3: 2026-10-29: Resume cleanup and preserve GitHub history
+**Who:** Codex with repository owner authorization
+**Goal:** Recheck the stable website and publish a linear descendant of GitHub's existing history without starting V2.4.
+
+**Changed**
+- Extended `.gitignore` for alternate environments, tox/nox output and temporary patch files.
+- Rechecked the ZIP-derived unborn checkout against a fresh clone of `refactor` at `054a768ee47f2b5461947ac442dbf66b726d2669`: no remote-only files; public catalog is byte-identical.
+- Created the integration checkout at the workspace sibling `github-integration`, based on both existing remote commits. No unrelated history replacement or remote branch deletion.
+- Removed four disposable cache files. OS permissions prevented removing 64 existing cache files; they remain ignored. Preserved the external recovery backup and usable original virtual environment.
+
+**Decisions**
+- Create `main` only while it is absent remotely and `refactor` remains unchanged; an ordinary push preserves GitHub's existing history. Remote default-branch settings remain unchanged.
+- Fresh standard Python 3.13 environment with locked requirements validates reproducibility independently of Codex paths.
+- Staged source scan found only two fictional WAHA test credentials; 176 historical text versions had no detector findings. The unchanged database has only public scheme/crawl tables and empty metadata.
+
+**Tests:** 237 passed, 0 failed in the existing standard environment; fresh integration environment validation and `pip check` passed. Browser checks at 1440/1024/768/390/320px passed for landing/dashboard, English/Hindi/Marathi, navigation, redirects, Rescue, channels, legacy and docs.
+**Eval:** Unchanged. No live-model or live-WhatsApp accuracy claim.
+
+**Known issues / not done**
+- Some ignored caches are owned by another Windows account and cannot be physically removed in this session.
+- V2.4 has not started. Live multilingual LLM validation, durable case memory and external WAHA delivery remain future work.
+
+**Next:** Record the final publication SHA and synchronization result in the user handoff; stop after repository integration.
+
+---
+
+## v2.3: 2026-10-28: Consolidated website, repository audit and reproducible publication
+
+**Who:** Codex with repository owner authorization
+**Goal:** Preserve the verified website, remove disposable output, restore reproducibility and publish safely without rewriting shared history.
+
+**Changed**
+- Consolidated public landing at `/`, citizen dashboard at `/app`, `/chat` redirect, legacy form and APIs. Shared branding and English/Hindi/Marathi landing copy are included.
+- External full backup before cleanup. Removed three unreferenced installer snapshots, runtime logs and generated caches; retained source, tests, documents, installer and official catalog.
+- Hardened ignore rules, explicit public-catalog exception, text/binary attributes, pinned runtime requirements, separate development dependencies and offline CI.
+- Standard Python 3.13 environments replace the broken runtime-dependent setup. Windows launcher selects `.venv` explicitly. Replaced local machine paths in documentation/browser checks.
+- Added security/data-handling guidance and repository audit. Reviewed current source, both remote commits and public database for sensitive content.
+
+**Decisions**
+- Local history was unborn. Remote default `refactor` had two commits and no `main`; use a temporary clone and create a linear `main` descendant rather than replacing history. No force-push, branch deletion, hard reset or destructive Git clean.
+- No remote-only files or unaccounted teammate changes found. Public catalog rows match the existing remote; no citizen tables or sensitive identity-field keys found.
+- Two detector hits are fictional WAHA test credentials. No real secret found in reviewed source/history.
+
+**Tests:** 237 passed, 0 failed (`python -m pytest -q` in a fresh standard Python 3.13 environment). `pip check` passed. Browser checks at 1440/1024/768/390/320px passed, including translations, routes, chat states, scheme/Rescue/channel flows and docs. HTTP and asset checks passed.
+**Eval:** Existing small fixture evaluation is unchanged; no new real-world accuracy claim.
+
+**Known issues / not done**
+- Hosted model extraction and external WhatsApp delivery require private configuration and live validation.
+- Durable sessions, deployment access/rate controls and queued webhook processing remain deployment work. Voice and live government status/submission are not implemented.
+
+**Next:** Validate deployment configuration and review top scheme rules against official sources. See `docs/REPOSITORY_AUDIT.md` for cleanup and integration details.
 
 ---
 
