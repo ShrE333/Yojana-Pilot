@@ -1,0 +1,12 @@
+"Person's message: I am 62 in Maharashtra":
+  language: en
+  facts: {age: 62, state: maharashtra}
+  intent: give_info
+"Person's message: मेरी उम्र 62 है":
+  language: hi
+  facts: {age: 62, state: maharashtra}
+  intent: give_info
+"Person's message: माझे वय 62 आहे":
+  language: mr
+  facts: {age: 62, state: maharashtra}
+  intent: give_info

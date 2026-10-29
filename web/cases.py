@@ -1,0 +1,72 @@
+"""Authorized case review. Approval records acknowledge guidance, never submit applications."""
+import json
+import time
+import uuid
+from fastapi import APIRouter, HTTPException, Request
+from pydantic import BaseModel
+from typing import Literal
+from . import case_store
+from .access import owner
+
+router = APIRouter(prefix='/api/cases', tags=['Cases'])
+
+
+def persistent():
+    if not case_store.enabled():
+        raise HTTPException(503, 'Persistent case storage is not configured')
+
+
+class Review(BaseModel):
+    status: Literal['open', 'reviewed', 'closed']
+
+
+class Approval(BaseModel):
+    decision: Literal['approved', 'declined']
+    purpose: Literal['review_guidance'] = 'review_guidance'
+
+
+@router.get('/{sid}')
+def get_case(sid: str, request: Request, optional: bool = False):
+    try:
+        return _get_case(sid, request)
+    except HTTPException as exc:
+        if optional and exc.status_code in (403, 404, 503):
+            return {'available': False}
+        raise
+
+
+def _get_case(sid, request):
+    persistent()
+    with case_store.transaction(sid) as tx:
+        row = tx.session(sid, owner(request))
+        return {'available': True, 'id': sid, 'profile': row['state'].get('profile', {}),
+                'pending_question': row['state'].get('pending'), 'status': row['status'],
+                'rescue': row['state'].get('rescue'),
+                'created_at': row['created_at'], 'updated_at': row['updated_at'], 'expires_at': row['expires_at'],
+                'messages': tx.history(sid), 'approvals': [dict(r) for r in tx.execute(
+                    'SELECT id,decision,purpose,facts_hash,created_at FROM case_approvals WHERE session_id=? ORDER BY created_at', (sid,))]}
+
+
+@router.patch('/{sid}')
+def review_case(sid: str, body: Review, request: Request):
+    persistent()
+    with case_store.transaction(sid) as tx:
+        tx.session(sid, owner(request))
+        tx.execute('UPDATE case_sessions SET status=?,updated_at=? WHERE id=?', (body.status, time.time(), sid))
+    return {'status': body.status}
+
+
+@router.post('/{sid}/approvals')
+def approve(sid: str, body: Approval, request: Request):
+    persistent()
+    with case_store.transaction(sid) as tx:
+        row = tx.session(sid, owner(request))
+        facts_hash = case_store.digest(json.dumps({'profile': row['state'].get('profile', {}),
+                                                  'rescue': row['state'].get('rescue')}, sort_keys=True))
+        # A bounded review log, not unlimited citizen activity tracking.
+        if tx.execute('SELECT COUNT(*) AS n FROM case_approvals WHERE session_id=?', (sid,)).fetchone()['n'] >= 20:
+            raise HTTPException(409, 'Review history limit reached')
+        identifier = uuid.uuid4().hex
+        tx.execute('INSERT INTO case_approvals VALUES(?,?,?,?,?,?)',
+                   (identifier, sid, body.decision, body.purpose, facts_hash, time.time()))
+    return {'id': identifier, 'decision': body.decision, 'facts_hash': facts_hash, 'government_submission': False}

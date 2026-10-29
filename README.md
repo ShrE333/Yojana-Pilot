@@ -1,5 +1,7 @@
 # Yojana-Pilot
 
+V2.4 deployment infrastructure is prepared on `feature/v2.4-live-ai-waha`; it has not been deployed. See [DEPLOYMENT.md](DEPLOYMENT.md) for Vercel, EasyPanel Docker, PostgreSQL, WAHA and live validation instructions. The 237-test V2.3 baseline below is preserved; current validation is recorded in PROGRESS.md. Production case persistence requires the documented runtime configuration.
+
 **A public civic-tech website and citizen workspace for scheme discovery, eligibility guidance and application-blocker investigation.**
 
 A person tells us a few things about themselves, in Hindi, Marathi or English. We search official

@@ -10,13 +10,13 @@ This file is the project's history, newest entry first. Read it top to bottom to
 
 | | |
 |---|---|
-| Version | v2.3 consolidated website |
+| Version | v2.4 deployment infrastructure (not deployed) |
 | Last updated | 2026-10-29 |
-| Tests | 237 passed, 0 failed (standard Python 3.13) |
-| Phase | Public landing page, citizen dashboard, conversational API, Rescue and WAHA adapter; audited repository consolidation |
+| Tests | 257 passed, 1 skipped, 0 failed (real PostgreSQL requires an external test server) |
+| Phase | Vercel frontend, Docker/EasyPanel backend, persistent cases and signed durable WAHA processing; local deployment validation |
 | Schemes | 267 public scheme records; 1,008 crawl records; catalog preserved unchanged |
 | Eval | eligibility 36/36 on 12 personas; start-with 12/12; name matcher P=1.00 R=1.00 on 20 pairs (small self-labelled sets) |
-| Next task | V2.4 planning only after repository integration; live models, persistent case memory and WAHA remain unvalidated |
+| Next task | Owner review/publication; Docker and PostgreSQL validation; EasyPanel/Vercel setup and genuine hosted inference/WAHA checks |
 
 ---
 
@@ -41,6 +41,32 @@ This file is the project's history, newest entry first. Read it top to bottom to
 
 **Next:** the next concrete step
 ```
+
+---
+
+## v2.4: 2026-10-29: Deployment infrastructure and persistent case memory
+**Who:** Codex with repository owner authorization
+**Goal:** Prepare the existing website for Vercel, Docker/EasyPanel, PostgreSQL and a separate WAHA service on the existing 6 GB VM; do not push or deploy.
+
+**Changed**
+- Standalone `frontend/` retains all public/dashboard/legacy assets. Its dependency-free Node build emits Vercel Build Output API HTTPS rewrites; API calls and native SSE stay on the frontend origin. Added asset drift checks and local proxy simulation.
+- Added pinned-Python non-root Docker runtime, writable public catalog scratch copy, one worker, bounded concurrency, health/readiness, staging Compose and separate official-image WAHA Compose template with a pairing volume and protected API/dashboard.
+- Added PostgreSQL case migrations/repository (SQLite adapter for offline validation), owner authorization via HttpOnly cookie or Bearer capability, validated facts, bounded minimized messages, pending questions, case status, guidance-review approvals, absolute retention, deletion and cleanup. Restores main and legacy sessions; interrupted legacy discovery is reported rather than replayed.
+- Added signed SHA-512 WAHA endpoint, hashed opt-in mappings, durable event/outbox deduplication and retry reuse; STOP clears the local case and cancels queued earlier replies. Production disables the old URL-secret webhook. Ambiguous external-send failures remain at-least-once, not exactly-once.
+- Hosted OpenAI-compatible inference keeps Groq/Qwen support, bounded SDK timeout, safe provider status/error classes, contextual extraction and metadata-only error logging. Production rejects local/mock providers. No genuine inference request was attempted.
+- Added deployment tests, mocked multilingual browser checks, Docker/PostgreSQL restart smoke tooling, exact EasyPanel/Vercel/WAHA/rollback instructions in DEPLOYMENT.md and origin/storage audit in docs/DEPLOYMENT_AUDIT_V24.md.
+
+**Tests:** Full suite 257 passed, 1 skipped, 0 failed; original 237-test baseline preserved. `pip check`, frontend synchronization/build, JavaScript syntax and whitespace checks pass. All five-width responsive browser checks pass through the built frontend/local reverse-proxy simulator, including English/Hindi/Marathi landing, navigation, chat retry/reset, Rescue, channels, legacy/docs. Separate en/hi/mr mocked browser checks pass for conversation, cookie authorization, saved-case reload and deletion. HTTP routes, API cache controls and incremental SSE/resume passed through the local proxy.
+**Eval:** No new real-world model-quality claim. Public scheme catalog unchanged.
+
+**Known issues / not done**
+- Docker build was attempted but Docker CLI/daemon is unavailable. No PostgreSQL server is installed; its dedicated test is explicitly skipped. Image execution, actual PostgreSQL migrations/service-restart persistence and resource consumption remain owner-run validation steps; SQLite tests are not a substitute.
+- Live Vercel rewrites, EasyPanel deployment, hosted-model requests and actual WAHA pairing/delivery are unverified. No URLs or external successes are fabricated.
+- Local filesystem permissions prevented writing `.github/workflows/deployment.yml`; the complete optional CI workflow is supplied as `deploy/github-actions-deployment.yml` for owner activation. Existing workflow is untouched.
+- Existing SECURITY.md was also write-protected; the V2.4 deployment audit explicitly supersedes its old in-memory-only notes. README links the current deployment guidance.
+- No staging, commit, GitHub push, cloud deployment, real outbound message or paid inference request was performed.
+
+**Next:** Review the feature branch and run the supplied Docker/PostgreSQL smoke on a Docker host. Then publish/deploy deliberately following DEPLOYMENT.md, configure exact runtime URLs/secrets and perform live synthetic checks before public traffic.
 
 ---
 

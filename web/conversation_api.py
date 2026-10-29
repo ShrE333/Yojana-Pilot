@@ -1,17 +1,18 @@
 """Conversational beta: free-text profile extraction, deterministic follow-up selection.
 
 No official application submission or personal identification data collected.
-In-memory sessions are DEMO ONLY. Persist in Postgres before deployment.
+DATABASE_URL enables persistent cases. Without it, development sessions use RAM.
 """
 from __future__ import annotations
 
 import time
+import os
 import uuid
 import re
 from threading import RLock
 from typing import Any
 
-from fastapi import APIRouter, HTTPException
+from fastapi import APIRouter, HTTPException, Request, Response
 from pydantic import BaseModel, Field
 
 from core.fields import validate_profile
@@ -20,6 +21,9 @@ from discovery.catalog import load_catalog
 from saathi.shortlist import build_shortlist
 from saathi.understand import understand
 from llm import get_llm
+from . import case_store, inference
+from .access import owner, issue, require_memory
+from .privacy import redact
 
 router = APIRouter(tags=["Conversation Beta"])
 _lock = RLock()
@@ -57,6 +61,7 @@ class Message(BaseModel):
     text: str = Field(min_length=1, max_length=1800)
     lang: str = Field(default="en", pattern="^(en|hi|mr)$")
     session_id: str | None = Field(default=None, max_length=64)
+    request_id: str | None = Field(default=None, min_length=8, max_length=80)
 
 
 def _store(session_id, state):
@@ -90,29 +95,78 @@ def _next_question(profile, catalog, asked):
     return None
 
 
-@router.post("/api/v2/conversation")
-def conversation(body: Message):
+def conversation(body: Message, access_token=None, trusted=False, tx=None):
+    if tx is not None:
+        return _conversation(body, access_token, trusted, tx)
+    if case_store.enabled():
+        with case_store.transaction(body.session_id or 'new-conversation') as transaction:
+            return _conversation(body, access_token, trusted, transaction)
+    with _lock:
+        return _conversation(body, access_token, trusted, None)
+
+
+def _conversation(body, access_token, trusted, tx):
+    if tx and not body.session_id and body.request_id and access_token:
+        candidate = case_store.digest(access_token + ':' + body.request_id)[:32]
+        if tx.execute('SELECT id FROM case_sessions WHERE id=?', (candidate,)).fetchone():
+            body = body.model_copy(update={'session_id': candidate})
     # A new conversation requires no form, just a message.
     if body.session_id:
         with _lock:
-            state = _sessions.get(body.session_id)
+            row = tx.session(body.session_id, access_token, trusted) if tx else None
+            if row and row['status'] == 'closed':
+                raise HTTPException(409, 'Case is closed. Reopen it before continuing.')
+            state = row['state'] if row else _sessions.get(body.session_id)
             if not state or time.time() - state["updated"] > _TTL:
-                raise HTTPException(404, "Session expired; start a new conversation")
+                if not tx:
+                    raise HTTPException(404, "Session expired; start a new conversation")
+            if not tx and not trusted:
+                require_memory(state, access_token)
             state = {**state, "profile": dict(state["profile"]), "asked": list(state["asked"])}
         sid = body.session_id
     else:
-        sid = uuid.uuid4().hex
+        sid = case_store.digest(access_token + ':' + body.request_id)[:32] if tx and access_token and body.request_id else uuid.uuid4().hex
         state = {"profile": {}, "asked": [], "pending": None, "lang": body.lang,
-                 "updated": time.time()}
+                 "updated": time.time(), "owner_hash": case_store.digest(access_token or '')}
+
+    if body.request_id and state.get('last_request_id') == body.request_id:
+        if state.get('request_hash') != case_store.digest(body.text):
+            raise HTTPException(409, 'Request ID already used for a different message')
+        return state['last_response']
+
+    original_profile = dict(state['profile'])
+
+    def finish(result):
+        history_limit = max(2, min(int(os.getenv('CASE_HISTORY_LIMIT', '40')), 200))
+        state['history'] = (state.get('history', []) + [
+            {'role': 'user', 'content': redact(body.text)},
+            {'role': 'assistant', 'content': redact(result['message'])}])[-history_limit:]
+        if body.request_id:
+            state['last_request_id'], state['last_response'] = body.request_id, result
+            state['request_hash'] = case_store.digest(body.text)
+        state['updated'] = time.time()
+        if tx:
+            tx.save(sid, state, access_token)
+            if state['profile'] != original_profile:
+                tx.execute("UPDATE case_sessions SET status='open' WHERE id=?", (sid,))
+            tx.message(sid, 'user', body.text)
+            tx.message(sid, 'assistant', result['message'])
+        else:
+            _store(sid, state)
+        return result
 
     text = _safe_message(body.text)
 
     try:
         llm = get_llm("extractor")
-        parsed = understand(llm, text, state["pending"])
+        parsed = understand(llm, text, state["pending"],
+                            {'facts': state['profile'], 'recent_messages': state.get('history', [])[-10:]})
+        inference.succeeded(llm)
     except Exception as exc:
         # Don't falsely record a fact if the hosted service is down.
-        raise HTTPException(503, "Language service unavailable. Check the model configuration.") from exc
+        code = inference.failure(exc)
+        raise HTTPException(429 if code == 'rate_limited_or_quota_exhausted' else 503,
+                            {'code': code, 'message': 'Language service unavailable. Check the model configuration.'}) from exc
 
     cleaned, _ = validate_profile(parsed.facts)
     # A changed fact is not silently accepted; citizens can correct it explicitly.
@@ -127,11 +181,10 @@ def conversation(body: Message):
         if parsed.intent in ("dont_know",):
             state["pending"] = None
         elif parsed.intent in ("greeting", "other"):
-            _store(sid, state)
-            return {"session_id": sid, "message": _question_text(previous, state["lang"]),
+            return finish({"session_id": sid, "message": _question_text(previous, state["lang"]),
                     "question": {k: previous[k] for k in ("field", "text", "reason", "choices", "type")},
                     "profile": state["profile"], "results": _shortlist_public(state["profile"], load_catalog()),
-                    "corrections": changes, "disclaimer": "Recommendations are informational; verify against official sources."}
+                    "corrections": changes, "disclaimer": "Recommendations are informational; verify against official sources."})
     catalog = load_catalog()
     q = _next_question(state["profile"], catalog, state["asked"])
     if q:
@@ -141,17 +194,32 @@ def conversation(body: Message):
     else:
         state["pending"] = None
         answer = "I found possible schemes based on what you shared. Review the sources and verification notices below."
-    _store(sid, state)
     shortlist = _shortlist_public(state["profile"], catalog)
-    return {"session_id": sid, "message": answer, "question": {k: q[k] for k in
+    return finish({"session_id": sid, "message": answer, "question": {k: q[k] for k in
             ("field", "text", "reason", "choices", "type") } if q else None,
             "corrections": changes,
             "profile": state["profile"], "results": shortlist,
-            "disclaimer": "Recommendations are informational; verify unreviewed schemes against official sources."}
+            "disclaimer": "Recommendations are informational; verify unreviewed schemes against official sources."})
+
+
+@router.post('/api/v2/conversation')
+def conversation_http(body: Message, request: Request, response: Response):
+    token = owner(request)
+    if not body.session_id:
+        token = issue(request, response)
+    return conversation(body, access_token=token)
 
 
 @router.delete("/api/v2/conversation/{session_id}")
-def clear_conversation(session_id: str):
+def clear_conversation(session_id: str, request: Request = None):
+    token = owner(request) if request else None
+    if case_store.enabled():
+        with case_store.transaction(session_id) as tx:
+            tx.session(session_id, token)
+            tx.execute('DELETE FROM case_sessions WHERE id=?', (session_id,))
+        return {'deleted': True}
     with _lock:
+        if session_id in _sessions:
+            require_memory(_sessions[session_id], token)
         _sessions.pop(session_id, None)
     return {"deleted": True}
