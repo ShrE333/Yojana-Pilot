@@ -10,6 +10,7 @@ from dataclasses import dataclass, field
 
 from core.fields import profile_json_schema, validate_profile
 from llm import LLMClient
+from core.languages import ROWS
 
 INTENTS = ["give_info", "dont_know", "ask_about_scheme", "ask_general", "greeting", "restart", "other"]
 
@@ -36,16 +37,26 @@ class Understood:
     intent: str
     scheme_name: str | None = None
     dropped: list[str] = field(default_factory=list)
+    requested_category: str | None = None
+
+
+SYSTEM += ('\nFor all Indian languages and mixed-language messages, return the matching short language code '
+           'from this registry: ' + ', '.join(code for code,_ in ROWS) +
+           '. Preserve monetary amounts and proper names; never translate source URLs or invent facts. '
+           'The older hi/mr/en examples are examples, not a restriction on language detection.')
+SYSTEM += ('\nOptionally label requested_category as pension, income, education, agriculture, health, housing or employment '
+           'only when explicitly requested, in any language. Use null when uncertain. A statement of being not a student is not a request for scholarships.')
 
 
 def understanding_schema() -> dict:
     return {
         "type": "object",
         "properties": {
-            "language": {"enum": ["hi", "mr", "en"]},
+            "language": {"enum": [code for code, _ in ROWS]},
             "facts": profile_json_schema(brief=True),
             "intent": {"enum": INTENTS},
             "scheme_name": {"type": ["string", "null"]},
+            'requested_category': {'enum':['pension','income','education','agriculture','health','housing','employment',None]},
         },
         "required": ["language", "facts", "intent"],
     }
@@ -66,7 +77,7 @@ def understand(llm: LLMClient, text: str, asked: dict | None = None, prior_conte
     facts = {k: v for k, v in (data.get("facts") or {}).items() if v is not None}
     clean, errors = validate_profile(facts)
     return Understood(language=data["language"], facts=clean, intent=data["intent"],
-                      scheme_name=data.get("scheme_name"), dropped=errors)
+                      scheme_name=data.get("scheme_name"), dropped=errors,requested_category=data.get('requested_category'))
 
 
 def facts_line(profile: dict) -> str:

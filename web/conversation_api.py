@@ -24,6 +24,9 @@ from llm import get_llm
 from . import case_store, inference
 from .access import owner, issue, require_memory
 from .privacy import redact
+from core.relevance import intent_from_text
+from core.languages import normalize, ROWS
+from pydantic import field_validator
 
 router = APIRouter(tags=["Conversation Beta"])
 _lock = RLock()
@@ -47,21 +50,31 @@ QUESTION_TEXT = {
 }
 
 def _safe_message(text: str) -> str:
+    if re.search(r'(?:#|\b)handoff=[A-Za-z0-9_-]{32,100}',text):
+        raise HTTPException(422,'Do not paste private voice invitation links into messages.')
     for pattern, kind in SENSITIVE:
         if pattern.search(text):
             raise HTTPException(422, f"Please remove the {kind} before sending your message. Do not share Aadhaar, bank or phone numbers.")
     return text.strip()
 
 def _question_text(q: dict, lang: str) -> str:
-    localized = QUESTION_TEXT.get(q["field"], {}).get(lang)
+    localized = QUESTION_TEXT.get(q["field"], {}).get(lang) or (q.get('text_'+lang) if not q.get('synthetic') else None)
     return localized or q["text"]
 
 
 class Message(BaseModel):
     text: str = Field(min_length=1, max_length=1800)
-    lang: str = Field(default="en", pattern="^(en|hi|mr)$")
+    lang: str = 'en'
+    language_override: bool = False
     session_id: str | None = Field(default=None, max_length=64)
     request_id: str | None = Field(default=None, min_length=8, max_length=80)
+
+    @field_validator('lang')
+    @classmethod
+    def language(cls, value):
+        if value not in {'auto'} | {c for c,_ in ROWS} | {c+'-IN' for c,_ in ROWS}:
+            raise ValueError('Unsupported language code')
+        return normalize(value)
 
 
 def _store(session_id, state):
@@ -91,12 +104,14 @@ def _next_question(profile, catalog, asked):
             return {"field": c["field"], "text": q.get("text_en") or c["field"],
                     "reason": "This detail affects eligibility for: " + ", ".join(c["schemes"][:2]),
                     "choices": q.get("choices", []), "type": q.get("type", "text"),
-                    "qid": q["id"], "fields": q["fields"], "text_en": q.get("text_en", "")}
+                    "qid": q["id"], "fields": q["fields"], "text_en": q.get("text_en", ""),
+                    'text_hi':q.get('text_hi'),'text_mr':q.get('text_mr'),'synthetic':q.get('synthetic',False)}
     return None
 
 
 def conversation(body: Message, access_token=None, trusted=False, tx=None):
     if tx is not None:
+        tx.lock(body.session_id)
         return _conversation(body, access_token, trusted, tx)
     if case_store.enabled():
         with case_store.transaction(body.session_id or 'new-conversation') as transaction:
@@ -156,6 +171,7 @@ def _conversation(body, access_token, trusted, tx):
         return result
 
     text = _safe_message(body.text)
+    state['intent_context'] = intent_from_text(text, state.get('intent_context'))
 
     try:
         llm = get_llm("extractor")
@@ -169,11 +185,15 @@ def _conversation(body, access_token, trusted, tx):
                             {'code': code, 'message': 'Language service unavailable. Check the model configuration.'}) from exc
 
     cleaned, _ = validate_profile(parsed.facts)
+    if getattr(parsed,'requested_category',None) in ('pension','income','education','agriculture','health','housing','employment'):
+        state['intent_context']['categories'] = [parsed.requested_category]
     # A changed fact is not silently accepted; citizens can correct it explicitly.
     changes = {k: {"previous": state["profile"][k], "new": v} for k, v in cleaned.items()
                if k in state["profile"] and state["profile"][k] != v}
     state["profile"].update(cleaned)
-    state["lang"] = parsed.language if parsed.language in ("en", "hi", "mr") else body.lang
+    detected = normalize(parsed.language)
+    state['lang'] = body.lang if body.language_override and body.lang != 'auto' else (detected if detected != 'auto' else 'en')
+    context_profile = {**state['profile'], '_intent': state['intent_context']}
     if state["pending"] is not None and not cleaned:
         # If the user did not answer, keep the question active, instead of
         # marking another scheme field as asked and advancing the checklist.
@@ -183,10 +203,10 @@ def _conversation(body, access_token, trusted, tx):
         elif parsed.intent in ("greeting", "other"):
             return finish({"session_id": sid, "message": _question_text(previous, state["lang"]),
                     "question": {k: previous[k] for k in ("field", "text", "reason", "choices", "type")},
-                    "profile": state["profile"], "results": _shortlist_public(state["profile"], load_catalog()),
+                    "profile": state["profile"], "results": _shortlist_public(context_profile, load_catalog()),
                     "corrections": changes, "disclaimer": "Recommendations are informational; verify against official sources."})
     catalog = load_catalog()
-    q = _next_question(state["profile"], catalog, state["asked"])
+    q = _next_question(context_profile, catalog, state["asked"])
     if q:
         state["asked"].append(q["qid"])
         state["pending"] = q
@@ -194,11 +214,12 @@ def _conversation(body, access_token, trusted, tx):
     else:
         state["pending"] = None
         answer = "I found possible schemes based on what you shared. Review the sources and verification notices below."
-    shortlist = _shortlist_public(state["profile"], catalog)
+    shortlist = _shortlist_public(context_profile, catalog)
     return finish({"session_id": sid, "message": answer, "question": {k: q[k] for k in
             ("field", "text", "reason", "choices", "type") } if q else None,
             "corrections": changes,
-            "profile": state["profile"], "results": shortlist,
+            "profile": state["profile"], "results": shortlist, 'language': state['lang'],
+            'text_fallback': state['lang'] not in ('en','hi','mr'),
             "disclaimer": "Recommendations are informational; verify unreviewed schemes against official sources."})
 
 

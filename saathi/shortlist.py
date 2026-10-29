@@ -11,6 +11,7 @@ from core.benefit import benefit_of
 from core.eligibility import SchemeResult, evaluate_scheme
 from core.ranking import lesser_known, rank_schemes
 from discovery.catalog import norm_name
+from core.relevance import relevance
 
 SHOWN_STATUSES = ("eligible", "eligible_check_manually", "near_miss")
 
@@ -38,12 +39,19 @@ def card(r: SchemeResult, scheme: dict, scored=None) -> dict:
         "district": scheme.get("district"),
         "rules_met": [t.reason or f"{t.field} {t.op} {t.expected}" for t in r.trace if t.outcome == "pass"],
         "check_yourself": r.unmapped_criteria,
+        'missing_requirements': r.missing_fields,
+        'evidence': [{'rule': t.reason, 'outcome': t.outcome} for t in r.trace],
+        'next_steps': ([scheme['how_to_apply']] if scheme.get('how_to_apply') else ['Review the official source and confirm requirements before applying.']),
     }
 
 
 def build_shortlist(profile: dict, catalog: dict, n_others: int = 4) -> dict:
     results = [evaluate_scheme(s, profile) for s in catalog.values()]
     ranking = rank_schemes(results, catalog)
+    ordered = [r for r in ([ranking.start_with] if ranking.start_with else []) + ranking.queue
+               if relevance(catalog[r.scheme_id], profile) > 0]
+    ordered.sort(key=lambda r: -relevance(catalog[r.scheme_id], profile))
+    ranking.start_with, ranking.queue = (ordered[0], ordered[1:]) if ordered else (None, [])
     others = ranking.queue[:n_others]
 
     def made(r):
@@ -53,11 +61,12 @@ def build_shortlist(profile: dict, catalog: dict, n_others: int = 4) -> dict:
         "start_with": made(ranking.start_with) if ranking.start_with else None,
         "others": [made(r) for r in others],
         "more_eligible_not_shown": max(0, len(ranking.queue) - n_others),
-        "lesser_known": [made(r) for r in lesser_known(results, catalog)],
-        "near_misses": [card(r, catalog[r.scheme_id]) for r in ranking.near_misses[:3]],
+        "lesser_known": [made(r) for r in sorted(lesser_known(results, catalog),key=lambda r:-relevance(catalog[r.scheme_id],profile)) if relevance(catalog[r.scheme_id], profile) > 0],
+        'needs_information': [made(r) for r in sorted(ranking.pending, key=lambda r: -relevance(catalog[r.scheme_id], profile)) if relevance(catalog[r.scheme_id], profile) > 0][:3],
+        "near_misses": [card(r, catalog[r.scheme_id]) for r in ranking.near_misses if relevance(catalog[r.scheme_id],profile)>0][:3],
         "check_on_official_page": [{"name": r.name, "source_url": r.source_url,
-                                    "conditions": r.unmapped_criteria[:3]} for r in ranking.check_manually[:3]],
-        "need_more_info": len(ranking.pending),
+                                    "conditions": r.unmapped_criteria[:3]} for r in ranking.check_manually if relevance(catalog[r.scheme_id],profile)>0][:3],
+        "need_more_info": sum(relevance(catalog[r.scheme_id],profile)>0 for r in ranking.pending),
         "schemes_checked": len(results),
     }
 

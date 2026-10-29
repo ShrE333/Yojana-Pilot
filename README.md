@@ -1,5 +1,7 @@
 # Yojana-Pilot
 
+V2.5 citizen experience is implemented locally on `feature/v2.5-citizen-experience`: intent-aware recommendations, browser voice and secure WhatsApp case handoff with consent-based summaries. See [the V2.5 runbook](docs/V25_CITIZEN_EXPERIENCE.md) for local commands, migrations, coverage limits and required live verification. Nothing has been pushed or deployed by this implementation.
+
 V2.4 deployment infrastructure is prepared on `feature/v2.4-live-ai-waha`; it has not been deployed. See [DEPLOYMENT.md](DEPLOYMENT.md) for Vercel, EasyPanel Docker, PostgreSQL, WAHA and live validation instructions. The 237-test V2.3 baseline below is preserved; current validation is recorded in PROGRESS.md. Production case persistence requires the documented runtime configuration.
 
 **A public civic-tech website and citizen workspace for scheme discovery, eligibility guidance and application-blocker investigation.**

@@ -22,6 +22,7 @@ from pydantic import BaseModel
 from .conversation_api import Message, conversation
 from . import case_store
 from .privacy import redact
+from .channel_security import seal, unseal
 
 router = APIRouter(tags=["WhatsApp (opt-in beta)"])
 _guard = threading.RLock()
@@ -193,6 +194,8 @@ def persistent_event(body):
             raise HTTPException(409, 'Event identity conflict')
         if not event:
             mapping = tx.execute('SELECT * FROM waha_chats WHERE chat_hash=?', (chat_hash,)).fetchone()
+            preference = tx.execute('SELECT mode FROM channel_preferences WHERE chat_hash=?',(chat_hash,)).fetchone()
+            awaiting = not preference or preference['mode'] != 'chat'
             command = text.strip().lower()
             reply = None
             if command in ('stop', 'unsubscribe', 'बंद', 'थांबा'):
@@ -200,6 +203,7 @@ def persistent_event(body):
                 status = 'stopped' if mapping and mapping['opted_in'] else 'not_opted_in'
                 if mapping and mapping['opted_in']:
                     if mapping['session_id']:
+                        tx.lock(mapping['session_id'])
                         tx.execute('DELETE FROM case_sessions WHERE id=?', (mapping['session_id'],))
                     tx.execute('DELETE FROM waha_chats WHERE chat_hash=?', (chat_hash,))
                     tx.execute("UPDATE waha_events SET status='sent',reply=NULL,result='cancelled' WHERE chat_hash=?", (chat_hash,))
@@ -209,10 +213,33 @@ def persistent_event(body):
                     tx.execute('''INSERT INTO waha_chats VALUES(?,?,?,?) ON CONFLICT(chat_hash)
                         DO UPDATE SET opted_in=1,updated_at=excluded.updated_at''', (chat_hash, None, 1, time.time()))
                 status = 'started'
-                reply = 'Welcome to Yojana-Pilot! Describe your situation in English, Hindi or Marathi. Do not send identity, bank or phone numbers. Reply STOP to leave. This is independent guidance, not a government service.'
+                tx.execute("INSERT INTO channel_preferences VALUES(?,'awaiting') ON CONFLICT(chat_hash) DO UPDATE SET mode='awaiting'",(chat_hash,))
+                reply = 'Welcome to Yojana-Pilot! Choose 1 Chat or 2 Call (a browser voice session, not a phone call). You can also type your question. Reply CALL to switch later. Do not send identity, bank or phone numbers. Reply STOP to leave. Guidance only, not a government service.'
             elif not mapping or not mapping['opted_in']:
                 status = 'not_opted_in'
+            elif command == 'chat' or (command == '1' and awaiting):
+                tx.execute("INSERT INTO channel_preferences VALUES(?,'chat') ON CONFLICT(chat_hash) DO UPDATE SET mode='chat'",(chat_hash,))
+                status, reply = 'chat_selected', 'Chat selected. Describe the help you need and your situation. Reply CALL for browser voice or STOP to leave.'
+            elif command == 'call' or (command == '2' and awaiting):
+                tx.execute("INSERT INTO channel_preferences VALUES(?,'voice') ON CONFLICT(chat_hash) DO UPDATE SET mode='voice'",(chat_hash,))
+                from .voice import new_channel_case, handoff
+                sid = mapping['session_id']
+                if sid:
+                    tx.lock(sid)
+                    try:
+                        tx.session(sid,trusted=True)
+                    except HTTPException as exc:
+                        if exc.status_code != 404:
+                            raise
+                        sid = None
+                sid = sid or new_channel_case(tx)
+                tx.execute('UPDATE waha_chats SET session_id=?,updated_at=? WHERE chat_hash=?',(sid,time.time(),chat_hash))
+                tx.execute('INSERT INTO channel_routes VALUES(?,?) ON CONFLICT(chat_hash) DO UPDATE SET address_cipher=excluded.address_cipher',
+                           (chat_hash,seal(chat)))
+                link = handoff(tx,sid,chat_hash)
+                status,reply = 'voice_link', 'Open your private one-use browser voice link within 10 minutes. Do not forward it:\n'+link
             else:
+                tx.execute("INSERT INTO channel_preferences VALUES(?,'chat') ON CONFLICT(chat_hash) DO UPDATE SET mode='chat'",(chat_hash,))
                 sid = mapping['session_id']
                 if sid:
                     try:
@@ -234,7 +261,8 @@ def persistent_event(body):
                     status, reply = 'replied', redact(result['message'])
             now = time.time()
             tx.execute('INSERT INTO waha_events VALUES(?,?,?,?,?,?,?)',
-                       (event_id, chat_hash, 'pending' if reply else 'sent', status, reply, now, now))
+                       (event_id, chat_hash, 'pending' if reply else 'sent', status,
+                        seal(reply) if reply and '#handoff=' in reply else reply, now, now))
     # The response outbox is committed before delivery. A retry reuses it without
     # repeating extraction, fact mutation or opt-in transitions.
     with case_store.transaction(lock) as tx:
@@ -243,7 +271,7 @@ def persistent_event(body):
             return {'status': 'duplicate' if event['reply'] else event['result']}
         url, key, _ = _config()
         try:
-            _send(url, key, expected_session, chat, event['reply'])
+            _send(url, key, expected_session, chat, unseal(event['reply']) if event['result']=='voice_link' else event['reply'])
         except (httpx.HTTPError, OSError):
             raise HTTPException(503, 'Delivery pending; retry this event')
         tx.execute('UPDATE waha_events SET status=?,updated_at=? WHERE id=?', ('sent', time.time(), event_id))

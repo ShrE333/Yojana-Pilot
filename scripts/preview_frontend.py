@@ -46,7 +46,7 @@ def serve(backend, port):
                 self.send_header('Location', '/app')
                 self.end_headers()
                 return
-            target = {'/': 'index.html', '/app': 'app.html', '/legacy': 'legacy.html'}.get(route, route.lstrip('/'))
+            target = {'/': 'index.html', '/app': 'app.html', '/legacy': 'legacy.html','/voice':'voice.html'}.get(route, route.lstrip('/'))
             path = (ROOT / target).resolve()
             if not path.is_relative_to(ROOT.resolve()) or not path.is_file():
                 self.send_error(404)

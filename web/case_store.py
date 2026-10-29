@@ -44,12 +44,22 @@ class Transaction:
     def execute(self, sql, params=()):
         return self.connection.execute(sql.replace('?', '%s') if self.postgres else sql, params)
 
+    def lock(self, key):
+        if self.postgres and key:
+            identifier = int.from_bytes(hashlib.sha256(key.encode()).digest()[:8], 'big', signed=True)
+            self.execute('SELECT pg_advisory_xact_lock(?)', (identifier,))
+
     def session(self, sid, token=None, trusted=False):
         row = self.execute('SELECT * FROM case_sessions WHERE id=?', (sid,)).fetchone()
         if not row or row['expires_at'] <= time.time():
             raise HTTPException(404, 'Session expired or not found')
-        if auth_required() and not trusted and (not token or not hmac.compare_digest(row['owner_hash'], digest(token))):
-            raise HTTPException(403, 'Session access denied')
+        if auth_required() and not trusted:
+            authorized = token and hmac.compare_digest(row['owner_hash'], digest(token))
+            if token and not authorized:
+                authorized = self.execute('SELECT owner_hash FROM case_grants WHERE session_id=? AND owner_hash=? AND expires_at>?',
+                                          (sid, digest(token), time.time())).fetchone()
+            if not authorized:
+                raise HTTPException(403, 'Session access denied')
         return {**dict(row), 'state': json.loads(row['state'])}
 
     def save(self, sid, state, token=None, kind='conversation'):
@@ -97,9 +107,7 @@ def transaction(key=''):
         raise RuntimeError('DATABASE_URL must be postgresql:// (or sqlite:/// for offline validation)')
     tx = Transaction(connection, postgres)
     try:
-        if postgres and key:
-            lock = int.from_bytes(hashlib.sha256(key.encode()).digest()[:8], 'big', signed=True)
-            tx.execute('SELECT pg_advisory_xact_lock(?)', (lock,))
+        tx.lock(key)
         yield tx
         connection.commit()
     except BaseException:
@@ -125,6 +133,8 @@ def purge():
     with transaction('retention') as tx:
         now = time.time()
         tx.execute('DELETE FROM case_sessions WHERE expires_at<?', (now,))
+        tx.execute('DELETE FROM voice_links WHERE expires_at<?', (now,))
+        tx.execute('DELETE FROM case_grants WHERE expires_at<?', (now,))
         tx.execute('DELETE FROM waha_events WHERE updated_at<?', (now - 7 * 86400,))
         tx.execute('DELETE FROM waha_chats WHERE updated_at<?',
                    (now - max(1, min(int(os.getenv('CASE_RETENTION_DAYS', '30')), 365)) * 86400,))
@@ -132,4 +142,5 @@ def purge():
 
 def ready():
     with transaction() as tx:
-        return bool(tx.execute("SELECT version FROM schema_migrations WHERE version='001_cases.sql'").fetchone())
+        present = {row['version'] for row in tx.execute('SELECT version FROM schema_migrations')}
+        return {path.name for path in (Path(__file__).parent/'migrations').glob('*.sql')} <= present

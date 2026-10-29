@@ -40,6 +40,8 @@ def _get_case(sid, request):
     with case_store.transaction(sid) as tx:
         row = tx.session(sid, owner(request))
         return {'available': True, 'id': sid, 'profile': row['state'].get('profile', {}),
+                'recommendations': row['state'].get('last_response', {}).get('results'),
+                'voice_sessions': [dict(r) for r in tx.execute('SELECT id,status,created_at,ended_at FROM voice_calls WHERE session_id=? ORDER BY created_at DESC LIMIT 10',(sid,))],
                 'pending_question': row['state'].get('pending'), 'status': row['status'],
                 'rescue': row['state'].get('rescue'),
                 'created_at': row['created_at'], 'updated_at': row['updated_at'], 'expires_at': row['expires_at'],

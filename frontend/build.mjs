@@ -22,6 +22,7 @@ const routes = [
   {src: '^/chat/?$', status: 307, headers: {Location: '/app', ...noCache}},
   {src: '^/$', dest: '/index.html', headers: {'Cache-Control': 'no-cache'}},
   {src: '^/app/?$', dest: '/app.html', headers: {'Cache-Control': 'no-cache'}},
+  {src: '^/voice/?$', dest: '/voice.html', headers: {'Cache-Control': 'no-store', 'Referrer-Policy': 'no-referrer'}},
   {src: '^/legacy/?$', dest: '/legacy.html', headers: {'Cache-Control': 'no-cache'}},
   {src: '^/static/(.*)$', headers: {'Cache-Control': 'public, max-age=0, must-revalidate'}, continue: true},
   {handle: 'filesystem'},

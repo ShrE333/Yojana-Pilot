@@ -48,7 +48,7 @@ def test_migrations_are_idempotent_and_ready(persistent):
     case_store.migrate()
     assert case_store.ready()
     with case_store.transaction() as tx:
-        assert tx.execute('SELECT COUNT(*) AS n FROM schema_migrations').fetchone()['n'] == 1
+        assert tx.execute('SELECT COUNT(*) AS n FROM schema_migrations').fetchone()['n'] == 3
 
 
 def test_restart_persists_facts_pending_history_and_owner(persistent, monkeypatch):

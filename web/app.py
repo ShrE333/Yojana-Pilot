@@ -41,6 +41,8 @@ from .conversation_api import router as conversation_router
 from .waha_bridge import router as waha_router
 from .rescue_api import router as rescue_router
 from .cases import router as cases_router
+from .voice import router as voice_router
+from .frontend import decorate
 from . import case_store, runtime
 from .access import owner, issue, require_memory
 from .conversation_api import _safe_message
@@ -83,6 +85,7 @@ def create_app(planner=None, extractor=None, agent=None, discoverer_factory: Cal
     app.include_router(waha_router)
     app.include_router(rescue_router)
     app.include_router(cases_router)
+    app.include_router(voice_router)
     sessions: dict[str, WebSession] = {}
     session_cache_lock = threading.RLock()
     llms: dict[str, Any] = {"planner": planner, "extractor": extractor, "agent": agent}
@@ -154,13 +157,17 @@ def create_app(planner=None, extractor=None, agent=None, discoverer_factory: Cal
 
     @app.get("/")
     def index():
-        return FileResponse(STATIC / "landing.html", headers={"Cache-Control": "no-cache"})
+        return HTMLResponse(decorate((STATIC/'landing.html').read_text(encoding='utf-8')),headers={'Cache-Control':'no-cache'})
 
     @app.get("/app")
     def dashboard():
         html = (STATIC / 'chat.html').read_text(encoding='utf-8')
         html = html.replace('</body>', '<script src="/static/deployment.js" defer></script></body>')
-        return HTMLResponse(html, headers={"Cache-Control": "no-cache"})
+        return HTMLResponse(decorate(html, dashboard=True), headers={"Cache-Control": "no-cache"})
+
+    @app.get('/voice')
+    def voice_page():
+        return FileResponse(STATIC / 'voice.html', headers={'Cache-Control':'no-store','Referrer-Policy':'no-referrer'})
 
     @app.get("/chat")
     def chat_redirect():

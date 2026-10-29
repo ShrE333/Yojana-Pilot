@@ -49,7 +49,17 @@ async def lifespan(app):
                 # No connection strings or citizen content in operational logs.
                 import logging
                 logging.getLogger(__name__).error('Retention cleanup failed; check database readiness')
+    async def summaries():
+        from .voice import deliver_summaries
+        while True:
+            await asyncio.sleep(10)
+            try:
+                await asyncio.to_thread(deliver_summaries)
+            except Exception:
+                import logging
+                logging.getLogger(__name__).error('Summary queue pass failed; inspect service readiness')
     task = asyncio.create_task(retention()) if case_store.enabled() else None
+    summary_task = asyncio.create_task(summaries()) if case_store.enabled() else None
     try:
         yield
     finally:
@@ -57,6 +67,12 @@ async def lifespan(app):
             task.cancel()
             try:
                 await task
+            except asyncio.CancelledError:
+                pass
+        if summary_task:
+            summary_task.cancel()
+            try:
+                await summary_task
             except asyncio.CancelledError:
                 pass
 
@@ -67,9 +83,10 @@ def install(app):
     async def boundaries(request, call_next):
         path = request.url.path
         if path.startswith('/api/'):
+            max_body = 750000 if path == '/api/voice/stt' else 32768
             length = request.headers.get('content-length', '0')
             try:
-                if int(length) > 32768:
+                if int(length) > max_body:
                     return JSONResponse({'detail': 'Request too large'}, status_code=413)
             except ValueError:
                 return JSONResponse({'detail': 'Invalid content length'}, status_code=400)
@@ -77,7 +94,7 @@ def install(app):
                 chunks = bytearray()
                 async for chunk in request.stream():
                     chunks.extend(chunk)
-                    if len(chunks) > 32768:
+                    if len(chunks) > max_body:
                         return JSONResponse({'detail': 'Request too large'}, status_code=413)
                 request._body = bytes(chunks)  # Starlette's cached request replays this body downstream.
             if production() and request.method not in ('GET', 'HEAD', 'OPTIONS'):
@@ -85,7 +102,7 @@ def install(app):
                 allowed = os.getenv('APP_ORIGINS', '').split(',')
                 if origin and origin not in [v.strip() for v in allowed]:
                     return JSONResponse({'detail': 'Origin not allowed'}, status_code=403)
-            if production() and path in ('/api/v2/conversation', '/api/sessions'):
+            if production() and (path in ('/api/v2/conversation', '/api/sessions') or path.startswith('/api/voice/')):
                 # Defense in depth; use EasyPanel/edge limits too. Ignore spoofable forwarded IPs.
                 key = request.client.host if request.client else 'unknown'
                 now = time.monotonic()
@@ -102,7 +119,7 @@ def install(app):
             response.headers['Vercel-CDN-Cache-Control'] = 'no-store'
             response.headers['CDN-Cache-Control'] = 'no-store'
         response.headers['X-Content-Type-Options'] = 'nosniff'
-        response.headers['Referrer-Policy'] = 'same-origin'
+        response.headers.setdefault('Referrer-Policy', 'same-origin')
         return response
 
     @app.get('/healthz', include_in_schema=False)

@@ -10,3 +10,8 @@
   language: mr
   facts: {age: 62, state: maharashtra}
   intent: give_info
+"Person's message: I am 62, retired in Maharashtra and need financial assistance.":
+  language: en
+  facts: {age: 62, occupation: retired, state: maharashtra}
+  intent: give_info
+  requested_category: income

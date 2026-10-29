@@ -10,10 +10,10 @@ This file is the project's history, newest entry first. Read it top to bottom to
 
 | | |
 |---|---|
-| Version | v2.4 deployment infrastructure (not deployed) |
-| Last updated | 2026-10-29 |
-| Tests | 257 passed, 1 skipped, 0 failed (real PostgreSQL requires an external test server) |
-| Phase | Vercel frontend, Docker/EasyPanel backend, persistent cases and signed durable WAHA processing; local deployment validation |
+| Version | v2.5 citizen experience (not deployed) |
+| Last updated | 2026-10-30 |
+| Tests | 283 passed, 1 skipped, 0 failed (real PostgreSQL requires an external test server) |
+| Phase | Intent-aware recommendations, citizen actions, browser voice, secure WhatsApp case handoff and consent summary queue |
 | Schemes | 267 public scheme records; 1,008 crawl records; catalog preserved unchanged |
 | Eval | eligibility 36/36 on 12 personas; start-with 12/12; name matcher P=1.00 R=1.00 on 20 pairs (small self-labelled sets) |
 | Next task | Owner review/publication; Docker and PostgreSQL validation; EasyPanel/Vercel setup and genuine hosted inference/WAHA checks |
@@ -41,6 +41,32 @@ This file is the project's history, newest entry first. Read it top to bottom to
 
 **Next:** the next concrete step
 ```
+
+---
+
+## v2.5: 2026-10-30: Citizen experience, relevant questions and browser voice
+**Who:** Codex with repository owner authorization
+**Goal:** Implement V2.5 on feature/v2.5-citizen-experience without touching production, merging, pushing or calling paid services.
+
+**Changed**
+- core/relevance.py, core/questions.py, saathi/shortlist.py and web/conversation_api.py: explicit category/life-stage/occupation priority dominates unresolved-scheme count. Retired seniors seeking financial help explore pensions/income support, not scholarships. Geography and official eligibility stay deterministic and unchanged; no student flag or benefit is inferred.
+- web/frontend.py and public citizen assets: explicit government-scheme hero, four prominent citizen actions, source/evidence/missing-requirement cards, manual language options and saved voice history. Existing layouts, API contracts and owner/session restoration remain. Standalone frontend sync/build includes /voice.
+- web/voice.py, web/speech.py and browser voice assets: explicit microphone controls, recognition/transcription/thinking/playback states, typed fallback, bounded optional server STT, server-only Sarvam TTS and retained minimized transcript/ranked summaries. Real HTTP adapters are implemented but live speech quality is unverified.
+- Migrations 002_voice.sql and 003_channel_choices.sql add one-use link hashes, browser grants, encrypted channel routes, voice history/snapshots, summary outbox and persistent Chat/Call menu state. Numeric chat answers no longer accidentally select Call.
+- Secure WAHA START -> Chat/Call, same-case HTTPS fragment handoff, explicit atomic redemption, replay/expiry/STOP denial and encrypted retry payloads. Consent-based summary worker supports pending/retrying/failed/cancelled/accepted_by_waha, manual retries and cancellation; recipient delivery remains explicitly unverified.
+- 23-language BCP-47 registry with separate text/browser STT/provider speech coverage, automatic/mixed-language extraction, manual override and English fallback. Added ten-language fixtures without claiming real model or translation validation.
+- Deployment docs/runtime templates updated; docs/V25_CITIZEN_EXPERIENCE.md contains exact local/mock and staging instructions. Added scripts/check_citizen_browser.py; the old V2.3 browser script has fixed historical hero assertions and was write-protected, so its source was preserved.
+
+**Tests:** Full suite 283 passed, 1 skipped, 0 failed; targeted V2.5 suite 26 passed. Existing baseline preserved apart from updating the migration count for the two additive migrations. Dependency, frontend sync/build, JavaScript syntax and whitespace checks pass. Five-width browser checks passed through the standalone frontend/local proxy, covering citizen actions/translations, Explorer, real Rescue, voice layout, mocked en/hi/mr typed voice/restoration/mute/summary and simulated permission failure. HTTP API/routes/cache and incremental SSE/resumption smoke passed. Mobile screenshots visually inspected.
+**Eval:** No new real hosted-inference, recognition, speech synthesis, WhatsApp receipt or eligibility-quality claim. Public scheme catalog unchanged.
+
+**Known issues / not done**
+- Docker/PostgreSQL server binaries remain unavailable here; real PostgreSQL test is explicitly skipped. Production migrations/service restart and Vercel edge behavior still need staging checks.
+- Sarvam/Groq/Qwen credentials were not supplied or used for live calls. Actual microphone/browser-provider quality, ten-priority-language speech quality and WAHA pairing/delivery remain manual validation requirements.
+- Third-party send acknowledgement and database commit are not atomic; ambiguous failures can duplicate a WhatsApp response. The UI never equates WAHA acceptance with verified recipient delivery.
+- The existing untracked frontend/.gitignore was present before this work and was left untouched. No staging, commit, push, merge or deployment was performed.
+
+**Next:** Review the branch; follow the V2.5 runbook for Docker/PostgreSQL, genuine hosted inference, mobile microphone, Sarvam and opted-in WhatsApp staging checks before considering publication/deployment.
 
 ---
 
