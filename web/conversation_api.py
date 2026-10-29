@@ -27,6 +27,8 @@ from .privacy import redact
 from core.relevance import intent_from_text
 from core.languages import normalize, ROWS
 from pydantic import field_validator
+from core.assessment import relevant_catalog, decide, conclusion, final_answer
+from .metrics import record
 
 router = APIRouter(tags=["Conversation Beta"])
 _lock = RLock()
@@ -66,6 +68,7 @@ class Message(BaseModel):
     text: str = Field(min_length=1, max_length=1800)
     lang: str = 'en'
     language_override: bool = False
+    refine: bool = False
     session_id: str | None = Field(default=None, max_length=64)
     request_id: str | None = Field(default=None, min_length=8, max_length=80)
 
@@ -150,8 +153,11 @@ def _conversation(body, access_token, trusted, tx):
         return state['last_response']
 
     original_profile = dict(state['profile'])
+    if body.refine:
+        state.update(asked=[],pending=None,question_count=0,pending_repeats=0)
 
     def finish(result):
+        state['last_response']=result
         history_limit = max(2, min(int(os.getenv('CASE_HISTORY_LIMIT', '40')), 200))
         state['history'] = (state.get('history', []) + [
             {'role': 'user', 'content': redact(body.text)},
@@ -173,14 +179,17 @@ def _conversation(body, access_token, trusted, tx):
     text = _safe_message(body.text)
     state['intent_context'] = intent_from_text(text, state.get('intent_context'))
 
+    started=time.perf_counter()
     try:
         llm = get_llm("extractor")
         parsed = understand(llm, text, state["pending"],
                             {'facts': state['profile'], 'recent_messages': state.get('history', [])[-10:]})
         inference.succeeded(llm)
+        record('inference',time.perf_counter()-started)
     except Exception as exc:
         # Don't falsely record a fact if the hosted service is down.
         code = inference.failure(exc)
+        record('inference',time.perf_counter()-started,'error')
         raise HTTPException(429 if code == 'rate_limited_or_quota_exhausted' else 503,
                             {'code': code, 'message': 'Language service unavailable. Check the model configuration.'}) from exc
 
@@ -191,34 +200,46 @@ def _conversation(body, access_token, trusted, tx):
     changes = {k: {"previous": state["profile"][k], "new": v} for k, v in cleaned.items()
                if k in state["profile"] and state["profile"][k] != v}
     state["profile"].update(cleaned)
+    if state.get('assessment',{}).get('assessment_complete') and (state['profile']!=original_profile or getattr(parsed,'requested_category',None)):
+        state.update(asked=[],pending=None,question_count=0,pending_repeats=0)
     detected = normalize(parsed.language)
     state['lang'] = body.lang if body.language_override and body.lang != 'auto' else (detected if detected != 'auto' else 'en')
     context_profile = {**state['profile'], '_intent': state['intent_context']}
-    if state["pending"] is not None and not cleaned:
-        # If the user did not answer, keep the question active, instead of
-        # marking another scheme field as asked and advancing the checklist.
-        previous = state["pending"]
-        if parsed.intent in ("dont_know",):
-            state["pending"] = None
-        elif parsed.intent in ("greeting", "other"):
-            return finish({"session_id": sid, "message": _question_text(previous, state["lang"]),
-                    "question": {k: previous[k] for k in ("field", "text", "reason", "choices", "type")},
-                    "profile": state["profile"], "results": _shortlist_public(context_profile, load_catalog()),
-                    "corrections": changes, "disclaimer": "Recommendations are informational; verify against official sources."})
-    catalog = load_catalog()
-    q = _next_question(context_profile, catalog, state["asked"])
+    catalog = relevant_catalog(context_profile,load_catalog())
+    shortlist = _shortlist_public(context_profile, catalog) if catalog else {'start_with':None,'others':[],'needs_information':[],'schemes_checked':0}
+    count=state.get('question_count',len(state['asked']))
+    decision=decide({**context_profile,'_asked':state['asked']},catalog,shortlist,count,getattr(parsed,'assessment_complete',False))
+    q=None
+    previous=state.get('pending')
+    if (not decision['assessment_complete'] and previous and not cleaned
+            and parsed.intent in ('greeting','other') and state.get('pending_repeats',0)<1):
+        q=previous;state['pending_repeats']=state.get('pending_repeats',0)+1
+    elif not decision['assessment_complete'] and decision['next_candidate']:
+        c=decision['next_candidate'];question=c['question']
+        q={'field':c['field'],'text':question.get('text_en') or c['field'],
+           'reason':'This detail affects eligibility for: '+', '.join(c['schemes'][:2]),
+           'choices':question.get('choices',[]),'type':question.get('type','text'),
+           'qid':question['id'],'fields':question['fields'],'text_en':question.get('text_en',''),
+           'text_hi':question.get('text_hi'),'text_mr':question.get('text_mr'),'synthetic':question.get('synthetic',False)}
+        state['pending_repeats']=0
     if q:
-        state["asked"].append(q["qid"])
+        if q['qid'] not in state['asked']:
+            state["asked"].append(q["qid"])
+        state['question_count']=count+1
         state["pending"] = q
         answer = _question_text(q, state["lang"])
     else:
         state["pending"] = None
-        answer = "I found possible schemes based on what you shared. Review the sources and verification notices below."
-    shortlist = _shortlist_public(context_profile, catalog)
+        answer = final_answer(decision)
+    decision.pop('next_candidate',None)
+    decision['question_count']=state.get('question_count',count)
+    state['assessment']=decision
     return finish({"session_id": sid, "message": answer, "question": {k: q[k] for k in
             ("field", "text", "reason", "choices", "type") } if q else None,
             "corrections": changes,
             "profile": state["profile"], "results": shortlist, 'language': state['lang'],
+            'assessment_complete':decision['assessment_complete'],'assessment':decision,
+            'recommendations':decision['recommendations'],'spoken_text':answer[:360] if q else conclusion(decision['recommendations']),
             'text_fallback': state['lang'] not in ('en','hi','mr'),
             "disclaimer": "Recommendations are informational; verify unreviewed schemes against official sources."})
 

@@ -64,5 +64,5 @@
       activity('Saved conversation is unavailable or expired. Start a new conversation.');
     }
   }
-  resume();
+  window.addEventListener('load',()=>window.YojanaCase?window.YojanaCase.refresh():resume(),{once:true});
 })();

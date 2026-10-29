@@ -291,7 +291,7 @@ def test_citizen_frontend_voice_and_security_headers():
     client=TestClient(create_app())
     landing=client.get('/')
     assert 'Find government schemes' in landing.text
-    assert 'citizen.js' in client.get('/app').text
+    assert 'dashboard-state.js' in client.get('/app').text
     page=client.get('/voice')
     assert page.status_code==200 and page.headers['referrer-policy']=='no-referrer'
     for key in ('voice-start','voice-mute','voice-end','voice-transcript','summary-consent'):

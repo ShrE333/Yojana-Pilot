@@ -1,5 +1,21 @@
 # V2.5 citizen experience: local release and verification
 
+## Automatic assessment and restored results
+
+Python now bounds assessment to relevant geographic/intent candidates and stops on useful coverage, low question value, exhausted useful questions or a question budget. An extractor completion suggestion cannot bypass this policy. Unknown conditions remain explicit; completion is not official eligibility approval. Default question budget is seven, optionally configured with `ASSESSMENT_QUESTION_BUDGET` (1–12). Repeated prompts are bounded. Chat, WhatsApp and browser voice share this policy and return `assessment_complete`, structured recommendations and a short `spoken_text`.
+
+Completed voice turns atomically save the final snapshot and ended timestamp before returning. Repeated request IDs and manual End do not finalize twice. The dashboard restores the authorized case through `/api/cases/{session_id}`, including the latest completed voice summary, assessment date and retained history. Refresh and Refine results are explicit actions. Only the opaque case ID is kept in sessionStorage; transcripts remain in the case store under existing retention rules. No new migration or required environment variable is introduced by these fixes.
+
+Assistant text appears before speech finishes. Speech uses short utterances, cancellation epochs and a bounded timeout. Server TTS failure falls back to device speech or readable text. Sarvam 402 disables further requests for that server key until process restart/key replacement; 429 has a server cooldown and disables server speech for the current browser call. Unsupported languages fall back without repeated requests in that call. See [Sarvam errors](https://docs.sarvam.ai/api/getting-started/errors-troubleshooting). Logs contain only stage, duration and outcome for STT/inference/TTS; they must not include citizen text or identifiers.
+
+Run the additional browser check against the built frontend proxy with the mock extraction fixture:
+
+```sh
+python scripts/check_completion_browser.py --url http://127.0.0.1:8080
+```
+
+This checks automatic ending, saved results after navigation/reload, unauthorized restoration, two successful simulated audio turns followed by credit exhaustion, device fallback and manual End. It does not verify real microphone hardware, provider credits or production proxy behavior. Before release, verify a genuine authorized Groq conversation and Sarvam speech on a test case, interrupt playback, navigate away after completion, reload the dashboard, confirm one saved summary, and repeat in English/Hindi/Marathi on mobile. Test provider failure using a staging mock/proxy rather than exhausting paid credits. Run migrations and restart-persistence checks against disposable PostgreSQL separately; SQLite development checks do not establish PostgreSQL connectivity.
+
 This release is implemented on `feature/v2.5-citizen-experience`. No merge, push, production change or deployment was performed. The existing V2.4 Docker/EasyPanel/PostgreSQL/Vercel architecture remains. `/voice` is a browser session; there is no native phone call, native WhatsApp call, LiveKit installation or local GPU service.
 
 ## Relevance and safe recommendations

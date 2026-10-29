@@ -12,13 +12,28 @@ This file is the project's history, newest entry first. Read it top to bottom to
 |---|---|
 | Version | v2.5 citizen experience (not deployed) |
 | Last updated | 2026-10-30 |
-| Tests | 283 passed, 1 skipped, 0 failed (real PostgreSQL requires an external test server) |
-| Phase | Intent-aware recommendations, citizen actions, browser voice, secure WhatsApp case handoff and consent summary queue |
+| Tests | 295 passed, 1 skipped, 0 failed (real PostgreSQL requires an external test server) |
+| Phase | Bounded automatic assessment, durable voice finalization, dashboard restoration and resilient speech fallback |
 | Schemes | 267 public scheme records; 1,008 crawl records; catalog preserved unchanged |
 | Eval | eligibility 36/36 on 12 personas; start-with 12/12; name matcher P=1.00 R=1.00 on 20 pairs (small self-labelled sets) |
 | Next task | Owner review/publication; Docker and PostgreSQL validation; EasyPanel/Vercel setup and genuine hosted inference/WAHA checks |
 
 ---
+
+## v2.5: 2026-10-30: automatic assessment and resilient voice
+**Who:** Codex
+**Goal:** Complete useful assessments without catalog exhaustion and restore authorized results reliably.
+
+**Changed**
+- Added deterministic intent/geography coverage, uncertainty and question-budget policy shared by existing conversation channels.
+- Persisted automatic voice completion atomically, added short speech and stale playback cancellation, and bounded Sarvam quota/error fallback.
+- Added authorized dashboard match/history restoration and refresh/refinement controls; synchronized standalone frontend.
+- Added completion, authorization, speech failure and browser restoration regression coverage and updated deployment runbook.
+
+**Tests:** 295 passed, 1 skipped; frontend build and JavaScript syntax checks passed. Completion browser suite, citizen responsive workflows at five widths, English/Hindi/Marathi workflows and route/SSE smoke checks passed against local mocked inference and simulated audio. Python syntax/secret review found only existing CI references and synthetic test candidates; catalog matches HEAD, index empty.
+
+**Known issues / not done**
+- Real PostgreSQL persistence test skipped without an external test server. Hosted Groq/Sarvam, physical microphone/device audio and production proxy behavior require staging verification. No commit, push or deployment performed; no new migration or required environment variable.
 
 ## Entry template
 

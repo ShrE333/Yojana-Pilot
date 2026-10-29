@@ -4,6 +4,8 @@
  let handoff=new URLSearchParams(location.hash.slice(1)).get('handoff');
  if(location.hash)history.replaceState(null,'',location.pathname); // Never retain a capability in history/referrers.
  let cid=null,sid=null,busy=false,muted=false,ended=false,recognition=null,recorder=null,stream=null,audio=null,audioURL=null,recordTimer=null,lastRetry=null,capabilities={},pollTimer=null;
+ let speechEpoch=0,speechAbort=null,serverSpeechDisabled=false,creditsExhausted=false;
+ const unsupportedSpeech=new Set();
  const Recognition=window.SpeechRecognition||window.webkitSpeechRecognition;
  const language=()=>$('voice-language').value;
  function state(name,help){document.body.dataset.state=name.toLowerCase();$('voice-state').textContent=name;if(help)$('voice-help').textContent=help}
@@ -14,10 +16,12 @@
    const data=await r.json().catch(()=>({}));if(!r.ok){const error=new Error(typeof data.detail==='string'?data.detail:data.detail?.code?.replaceAll('_',' ')||'Request failed. Please retry.');error.status=r.status;throw error}return data
   }finally{clearTimeout(timer)}
  }
- function controls(){for(const id of ['voice-listen','voice-send'])$(id).disabled=!cid||busy||ended;$('voice-end').disabled=!cid||ended;$('voice-mute').disabled=!cid||ended}
+ function controls(){for(const id of ['voice-listen','voice-send'])$(id).disabled=!cid||busy||ended;$('voice-end').disabled=!cid||ended;$('voice-mute').disabled=!cid}
  function append(role,text){$('voice-transcript').append(create('div',text,'turn '+role));$('voice-transcript').scrollTop=$('voice-transcript').scrollHeight}
- function stopMedia(){recognition?.abort();recognition=null;if(recorder?.state==='recording')recorder.stop();recorder=null;stream?.getTracks().forEach(t=>t.stop());stream=null;clearTimeout(recordTimer);if(audio){audio.pause();audio=null}if(audioURL){URL.revokeObjectURL(audioURL);audioURL=null}window.speechSynthesis?.cancel()}
+ function cancelPlayback(){speechEpoch++;speechAbort?.abort();speechAbort=null;if(audio){audio.onended=null;audio.pause();audio=null}if(audioURL){URL.revokeObjectURL(audioURL);audioURL=null}window.speechSynthesis?.cancel()}
+ function stopMedia(){recognition?.abort();recognition=null;if(recorder?.state==='recording')recorder.stop();recorder=null;stream?.getTracks().forEach(t=>t.stop());stream=null;clearTimeout(recordTimer);cancelPlayback()}
  async function start(){
+  stopMedia();serverSpeechDisabled=creditsExhausted;unsupportedSpeech.clear();$('summary-consent').checked=false;
   $('voice-start').disabled=true;state('Connecting','Opening your authorized case…');
   try{
    if(handoff){const linked=await api('/api/voice/redeem',{token:handoff});sid=linked.session_id;handoff=null}
@@ -28,32 +32,48 @@
    controls();retry(null);state('Ready',Recognition?'Choose Listen, or type. Your microphone stays off until you choose Listen.':capabilities.stt_configured?'Browser recognition is unavailable. Listen records up to 15 seconds for server transcription, or type.':'Speech recognition is unavailable in this browser. Type below to use the same session.');
   }catch(e){state('Unable to connect',e.message);$('voice-start').disabled=false;if(e.status===403||e.status===404){try{sessionStorage.removeItem('yojana-case-id')}catch{}sid=null}}
  }
- async function speak(result){
-  if(muted||ended)return state('Ready','Reply is available in the transcript. Choose Listen or type to continue.');
-  const text=result.message.slice(0,1200), lang=result.text_fallback?'en-IN':(result.language||'en')+'-IN';
-  state('Speaking',result.text_fallback?'Verified question text is unavailable for this language; reading the English fallback.':'Saathi is reading the response.');
-  try{
-   if(capabilities.tts_configured){
-    const controller=new AbortController(),timer=setTimeout(()=>controller.abort(),25000);let response;
-    try{response=await fetch('/api/voice/tts',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({call_id:cid,text,lang}),signal:controller.signal})}finally{clearTimeout(timer)}
-    if(!response.ok)throw new Error('Server speech unavailable. Read the transcript or retry playback.');
-    if(ended||muted)return;
-    audioURL=URL.createObjectURL(await response.blob());audio=new Audio(audioURL);
-    audio.onended=()=>{URL.revokeObjectURL(audioURL);audioURL=null;if(!ended&&!muted)state('Ready','Choose Listen or type your next answer.')};
-    await audio.play();retry(()=>speak(result));
-   }else if(window.speechSynthesis){
-    const utterance=new SpeechSynthesisUtterance(text);utterance.lang=lang;
-    utterance.onend=()=>{if(!ended&&!muted)state('Ready','Device speech finished. Choose Listen or type.')};
-    utterance.onerror=()=>{if(!muted&&!ended)state('Playback unavailable','Read the transcript or retry device speech.')};
-    window.speechSynthesis.speak(utterance);retry(()=>speak(result));
-   }else state('Ready','Audio playback is unavailable; the complete response is in the transcript.');
-  }catch(e){if(!ended){state('Playback unavailable',e.message);retry(()=>speak(result))}}
+ async function speak(result,final=false){
+  cancelPlayback();const epoch=speechEpoch;
+  const current=()=>epoch===speechEpoch&&!muted&&(!ended||final);
+  if(!current())return;
+  const text=(result.spoken_text||result.message).slice(0,360),lang=result.text_fallback?'en-IN':(result.language||'en')+'-IN';
+  const done=help=>{if(current())state(final?'Session ended':'Ready',help)};
+  function device(){if(!current())return;
+   if(window.speechSynthesis&&window.SpeechSynthesisUtterance){const utterance=new SpeechSynthesisUtterance(text);utterance.lang=lang;
+    utterance.onend=()=>done('Device speech finished. Your text and saved results remain available.');
+    utterance.onerror=()=>done('Device speech is unavailable. Continue using the readable transcript.');
+    state(final?'Session ended':'Speaking','Using available device voice. Server speech may be unavailable.');window.speechSynthesis.speak(utterance);
+   }else done('Audio is unavailable. Continue using the readable transcript.');
+  }
+  if(!capabilities.tts_configured||serverSpeechDisabled||unsupportedSpeech.has(lang)){device();return}
+  state(final?'Session ended':'Speaking','Your reply is ready. Preparing a short spoken response…');
+  speechAbort=new AbortController();const controller=speechAbort,timer=setTimeout(()=>controller.abort(),12000);
+  try{const response=await fetch('/api/voice/tts',{method:'POST',headers:{'Content-Type':'application/json'},
+     body:JSON.stringify({call_id:cid,text,lang,request_id:result.request_id}),signal:controller.signal});
+   if(!current())return;
+   if(!response.ok){const error=await response.json().catch(()=>({}));
+    if(response.status===409)return; // A newer reply superseded this audio.
+    if(response.status===402){creditsExhausted=true;serverSpeechDisabled=true}
+    else if(response.status===422)unsupportedSpeech.add(lang);else serverSpeechDisabled=true;
+    $('voice-help').textContent=error.detail?.code?.replaceAll('_',' ')||'Server speech unavailable; using device voice or text.';device();return
+   }
+   const blob=await response.blob();if(!current())return;
+   audioURL=URL.createObjectURL(blob);audio=new Audio(audioURL);
+   audio.onended=()=>{if(audioURL)URL.revokeObjectURL(audioURL);audioURL=null;done('Choose Listen or type to continue, or review your final results.')};
+   audio.onerror=()=>{if(current()){serverSpeechDisabled=true;cancelPlayback();void speak({...result},final)}};
+   await audio.play();retry(()=>speak(result,final));
+  }catch{if(current()){serverSpeechDisabled=true;device()}}finally{clearTimeout(timer)}
  }
  async function send(text,requestId=crypto.randomUUID()){
-  if(busy||!cid||ended||!text.trim())return;busy=true;recognition?.stop();controls();state('Thinking','Reading your words and checking the scheme rules…');
+  if(busy||!cid||ended||!text.trim())return;cancelPlayback();busy=true;recognition?.stop();controls();state('Thinking','Reading your words and checking the scheme rules…');
   try{const data=await api('/api/voice/'+cid+'/turn',{text,lang:language(),language_override:language()!=='auto',request_id:requestId});
    if(ended)return;
-   append('user',text);append('assistant',data.message+(data.question?.reason?'\nWhy I ask: '+data.question.reason:''));$('voice-text').value='';$('live-transcript').textContent='';retry(null);await speak(data)
+   append('user',text);append('assistant',data.message+(data.question?.reason?'\nWhy I ask: '+data.question.reason:''));$('voice-text').value='';$('live-transcript').textContent='';retry(null);
+   data.request_id=requestId;
+   if(data.assessment_complete){ended=true;stopMedia();renderSummary(data.summary||{schemes:data.recommendations,caveat:'Guidance only; verify official sources and missing conditions.'});delivery({whatsapp:{status:'not_requested'}});controls();state('Session ended','Assessment complete. Your results are saved; you can refine them in the dashboard.');$('voice-start').disabled=false;$('voice-start').textContent='Start another session';
+    if($('summary-consent').checked)api('/api/voice/'+cid+'/end',{consent_whatsapp:true}).then(delivery).catch(e=>{$('summary-status').textContent='Summary saved, but WhatsApp send was not requested successfully. '+e.message});
+    void speak(data,true);
+   }else void speak(data)
   }catch(e){if(!ended){state('Message not completed',e.name==='AbortError'?'The request timed out. Retry safely or type again.':e.message);$('voice-text').value=text;retry(()=>send(text,requestId))}}
   finally{busy=false;controls()}
  }
@@ -117,4 +137,5 @@
  fetch('/api/voice/capabilities').then(r=>r.json()).then(data=>{capabilities=data;for(const lang of data.languages){const o=create('option',lang.name+' · '+lang.code);o.value=lang.code;$('voice-language').append(o)}}).catch(()=>{$('coverage').textContent='Language coverage could not be loaded; typed input remains available.'});
  $('voice-language').onchange=()=>{const lang=capabilities.languages?.find(l=>l.code===language());$('coverage').textContent=lang?`Text: ${lang.text}; browser recognition: device dependent; Sarvam TTS: ${lang.sarvam_tts}. Live coverage is unverified.`:'Automatic text detection; browser listening follows the device language. Choose a language for more reliable recognition.'};
  window.addEventListener('pagehide',()=>{ended=true;stopMedia();clearInterval(pollTimer)});
+ window.addEventListener('pageshow',event=>{if(event.persisted){cid=null;ended=false;busy=false;controls();$('voice-start').disabled=false;$('voice-start').textContent='Resume saved session';state('Ready','Your accepted turns are saved. Resume to continue.')}});
 })();

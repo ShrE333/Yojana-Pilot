@@ -1,5 +1,7 @@
 # Yojana-Pilot V2.4 deployment
 
+V2.5 automatic assessment, durable voice finalization, authorized dashboard restoration and speech fallback are documented in [the V2.5 runbook](docs/V25_CITIZEN_EXPERIENCE.md#automatic-assessment-and-restored-results). These fixes need no new migration or required secret. The optional `ASSESSMENT_QUESTION_BUDGET` defaults to seven. Verify real PostgreSQL and hosted speech/inference in staging before deployment; local mocked tests do not establish external connectivity.
+
 V2.5 citizen experience, browser voice, one-use WhatsApp handoff and consent-based summaries are implemented on `feature/v2.5-citizen-experience`. Read [the V2.5 runbook](docs/V25_CITIZEN_EXPERIENCE.md) for migrations, server-only speech settings, language coverage, local commands and required live checks. The V2.4 infrastructure guidance below remains applicable; V2.5 adds a bounded summary worker and never deploys LiveKit or native phone calling.
 
 Target: Vercel static frontend → HTTPS EasyPanel FastAPI Docker app → private PostgreSQL, with a separate private WAHA service on the existing 6 GB GCP VM. Hosted Groq or Qwen handles inference. No GPU, local model service or LiveKit is included. Nothing has been deployed by this change and no deployment URL has been assigned.

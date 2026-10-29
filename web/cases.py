@@ -39,8 +39,17 @@ def _get_case(sid, request):
     persistent()
     with case_store.transaction(sid) as tx:
         row = tx.session(sid, owner(request))
+        completed=tx.execute("SELECT id,summary,ended_at FROM voice_calls WHERE session_id=? AND status='ended' AND summary IS NOT NULL ORDER BY ended_at DESC LIMIT 1",(sid,)).fetchone()
+        summary=json.loads(completed['summary']) if completed else None
+        # A newer chat refinement supersedes an older saved voice assessment.
+        use_voice=bool(completed and (not row['state'].get('last_response',{}).get('results')
+                                      or completed['ended_at']>=row['state'].get('updated',0)))
+        recommendations=({'schemes':summary.get('schemes',[])} if use_voice else
+                         row['state'].get('last_response',{}).get('results'))
         return {'available': True, 'id': sid, 'profile': row['state'].get('profile', {}),
-                'recommendations': row['state'].get('last_response', {}).get('results'),
+                'recommendations': recommendations,'latest_voice_summary':summary,
+                'assessment':row['state'].get('assessment'),
+                'assessment_date':completed['ended_at'] if use_voice else row['state'].get('updated',row['updated_at']),
                 'voice_sessions': [dict(r) for r in tx.execute('SELECT id,status,created_at,ended_at FROM voice_calls WHERE session_id=? ORDER BY created_at DESC LIMIT 10',(sid,))],
                 'pending_question': row['state'].get('pending'), 'status': row['status'],
                 'rescue': row['state'].get('rescue'),

@@ -97,6 +97,10 @@ def start(body: Start, request: Request, response: Response):
         active = tx.execute("SELECT id FROM voice_calls WHERE session_id=? AND status='active'", (sid,)).fetchone()
         if active:
             return {'call_id': active['id'], 'session_id': sid, 'resumed': True}
+        state=tx.session(sid,token)['state']
+        if state.get('assessment',{}).get('assessment_complete'):
+            state.update(asked=[],pending=None,question_count=0,pending_repeats=0)
+            tx.save(sid,state,token)
         if tx.execute('SELECT COUNT(*) AS n FROM voice_calls WHERE session_id=?', (sid,)).fetchone()['n'] >= 10:
             raise HTTPException(409, 'Case voice-history limit reached')
         cid = uuid.uuid4().hex
@@ -131,13 +135,14 @@ def turn(cid: str, body: Turn, request: Request):
     from .conversation_api import conversation, Message
     with case_store.transaction('voice:'+cid) as tx:
         row = call(tx, cid, owner(request))
-        if row['status'] != 'active':
-            raise HTTPException(409, 'Voice session has ended')
         transcript = json.loads(row['transcript'])
-        if transcript and transcript[-1].get('request_id') == body.request_id:
+        if (transcript and transcript[-1].get('request_id') == body.request_id
+                and (row['status']=='active' or transcript[-1].get('result',{}).get('assessment_complete'))):
             if transcript[-2]['text'] != redact(body.text):
                 raise HTTPException(409, 'Request ID conflict')
             return transcript[-1]['result']
+        if row['status'] != 'active':
+            raise HTTPException(409, 'Voice session has ended')
         if len(transcript) >= 80:
             raise HTTPException(409, 'Voice turn limit reached; end the session for your summary')
         result = conversation(Message(text=body.text, lang=body.lang, request_id=body.request_id,
@@ -148,6 +153,16 @@ def turn(cid: str, body: Turn, request: Request):
         transcript += [{'role':'user','text':redact(body.text)},
                        {'role':'assistant','text':redact(result['message']), 'request_id':body.request_id,'result':minimize(result)}]
         tx.execute('UPDATE voice_calls SET transcript=? WHERE id=?', (json.dumps(transcript,ensure_ascii=False),cid))
+        if result.get('assessment_complete'):
+            snapshot={'schemes':result['recommendations'],
+                      'caveat':'Guidance only; check missing conditions and official sources. No government approval is implied.',
+                      'government_submission':False,'assessment':result['assessment']}
+            tx.execute("UPDATE voice_calls SET status='ended',summary=?,ended_at=? WHERE id=? AND status='active'",
+                       (json.dumps(snapshot,ensure_ascii=False),time.time(),cid))
+            result['voice_finalized']=True
+            result['summary']=snapshot
+            transcript[-1]['result']=minimize(result)
+            tx.execute('UPDATE voice_calls SET transcript=? WHERE id=?',(json.dumps(transcript,ensure_ascii=False),cid))
         return result
 
 
@@ -155,14 +170,19 @@ def summary_for(state):
     if not state.get('profile'):
         return {'schemes': [], 'caveat':'More information is needed; no scheme eligibility has been confirmed.',
                 'government_submission':False}
+    if state.get('assessment'):
+        return {'schemes':state['assessment']['recommendations'],
+                'caveat':'Guidance only; check missing conditions and official sources.',
+                'assessment':state['assessment'],'government_submission':False}
     profile = {**state.get('profile', {}), '_intent': state.get('intent_context', {})}
-    shortlist = build_shortlist(profile, load_catalog())
+    from core.assessment import relevant_catalog
+    shortlist = build_shortlist(profile, relevant_catalog(profile,load_catalog()))
     cards, seen = [], set()
     for item in [shortlist.get('start_with')] + shortlist.get('others', []) + shortlist.get('needs_information', []):
         if item and item['id'] not in seen:
             seen.add(item['id'])
             cards.append(item)
-    return {'schemes': cards[:3], 'caveat': 'Guidance only; confirm official eligibility and missing requirements before applying.',
+    return {'schemes': cards[:5], 'caveat': 'Guidance only; confirm official eligibility and missing requirements before applying.',
             'government_submission': False}
 
 
@@ -247,6 +267,7 @@ class Speak(BaseModel):
     call_id: str = Field(max_length=64)
     text: str = Field(min_length=1,max_length=1200)
     lang: str = 'en'
+    request_id: str | None = Field(default=None,max_length=80)
 
 
 @router.post('/stt')
@@ -265,8 +286,14 @@ def speak(body: Speak, request: Request):
     with case_store.transaction('voice:'+body.call_id) as tx:
         row = call(tx,body.call_id,owner(request))
         transcript = json.loads(row['transcript'])
-        if row['status'] != 'active' or not transcript or transcript[-1]['role'] != 'assistant' or body.text != transcript[-1]['text'][:1200]:
+        latest=transcript[-1] if transcript else {}
+        result=latest.get('result',{})
+        allowed={result.get('spoken_text',''),latest.get('text','')[:360]}
+        if (not transcript or latest['role'] != 'assistant' or body.text not in allowed or len(body.text)>360
+                or (row['status']!='active' and not result.get('assessment_complete'))):
             raise HTTPException(403,'Only the current authorized assistant reply can be synthesized')
+        if body.request_id and body.request_id!=latest.get('request_id'):
+            raise HTTPException(409,'Stale speech request')
     return Response(speech.tts(body.text,body.lang),media_type='audio/wav',headers={'Cache-Control':'no-store'})
 
 

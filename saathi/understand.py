@@ -38,6 +38,7 @@ class Understood:
     scheme_name: str | None = None
     dropped: list[str] = field(default_factory=list)
     requested_category: str | None = None
+    assessment_complete: bool = False
 
 
 SYSTEM += ('\nFor all Indian languages and mixed-language messages, return the matching short language code '
@@ -57,6 +58,7 @@ def understanding_schema() -> dict:
             "intent": {"enum": INTENTS},
             "scheme_name": {"type": ["string", "null"]},
             'requested_category': {'enum':['pension','income','education','agriculture','health','housing','employment',None]},
+            'assessment_complete': {'type':'boolean'},
         },
         "required": ["language", "facts", "intent"],
     }
@@ -77,7 +79,8 @@ def understand(llm: LLMClient, text: str, asked: dict | None = None, prior_conte
     facts = {k: v for k, v in (data.get("facts") or {}).items() if v is not None}
     clean, errors = validate_profile(facts)
     return Understood(language=data["language"], facts=clean, intent=data["intent"],
-                      scheme_name=data.get("scheme_name"), dropped=errors,requested_category=data.get('requested_category'))
+                      scheme_name=data.get("scheme_name"), dropped=errors,requested_category=data.get('requested_category'),
+                      assessment_complete=data.get('assessment_complete',False))
 
 
 def facts_line(profile: dict) -> str:
