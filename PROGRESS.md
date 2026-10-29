@@ -64,6 +64,7 @@ This file is the project's history, newest entry first. Read it top to bottom to
 
 **Known issues / not done**
 - Some ignored caches are owned by another Windows account and cannot be physically removed in this session.
+- Publication is blocked: Git Credential Manager cannot authenticate in this session; the connected GitHub integration returns HTTP 403 `Resource not accessible by integration` for tree creation despite reporting repository push permission. Remote still has only `refactor`; no remote `main` or pull request was created.
 - V2.4 has not started. Live multilingual LLM validation, durable case memory and external WAHA delivery remain future work.
 
 **Next:** Record the final publication SHA and synchronization result in the user handoff; stop after repository integration.
