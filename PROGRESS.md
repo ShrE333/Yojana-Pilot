@@ -11,12 +11,26 @@ This file is the project's history, newest entry first. Read it top to bottom to
 | | |
 |---|---|
 | Version | v2.5 citizen experience (live deployment unverified) |
-| Last updated | 2026-10-30 |
-| Tests | 360 passed, 1 skipped, 0 failed (real PostgreSQL requires an external test server) |
-| Phase | AgentX final WhatsApp candidate: YOJANA activation, named Chat/Call, bounded voice notes, multilingual continuity and submission README |
+| Last updated | 2026-10-31 |
+| Tests | 390 passed, 1 skipped, 0 failed (real PostgreSQL requires an external test server) |
+| Phase | AgentX WhatsApp hotfix: NOWEB personal LID addressing, preserved activation/voice/consent controls |
 | Schemes | 267 public scheme records; 1,008 crawl records; catalog preserved unchanged |
 | Eval | eligibility 36/36 on 12 personas; start-with 12/12; name matcher P=1.00 R=1.00 on 20 pairs (small self-labelled sets) |
 | Next task | Owner review/publication; Docker and PostgreSQL validation; EasyPanel/Vercel setup and genuine hosted inference/WAHA checks |
+
+---
+
+## NOWEB personal LID sender hotfix: 2026-10-31
+
+**Who:** Codex, under repository-owner instructions.
+
+**Root cause / change:** The signed persistent webhook rejected personal `@lid` senders because its allowlist matched only phone-number `@c.us` addresses. Accept bounded ASCII numeric personal LIDs as well as existing phone JIDs. Preserve the full incoming chat ID and suffix for case hashing, reply requests and encrypted summary routes; never guess a phone number from an opaque LID. Groups, status/broadcast/newsletter IDs, malformed/device-qualified IDs, bot echoes and group-context flags remain rejected. No schema, credential, existing database/session, frontend or eligibility changes.
+
+**Regression evidence:** Signed inbound `yojana` activation exercises the real `_send` adapter with stubbed HTTP and asserts exact `/api/sendText` recipient/session/menu. Covers repeated events, pending reply retry, distinct LIDs, the same digits under different suffixes, conflicting event ownership, scoped STOP, HMAC rejection, voice-note same-case deduplication, browser one-time links, cross-user case authorization and consent-based summary routing. Final full suite: **390 passed, 0 failed, 1 skipped** in 113.19 seconds, including 30 LID regressions. Real PostgreSQL remains skipped without `TEST_POSTGRES_URL`. Python compilation and diff checks passed.
+
+**Engine contract:** Owner confirms deployed NOWEB CORE 2026.10.1 receives personal LIDs. Checked the matching upstream [POST /api/sendText controller](https://github.com/devlikeapro/waha/blob/2026.10.1/src/api/chatting.controller.ts#L73-L82), [NOWEB sendText method](https://github.com/devlikeapro/waha/blob/2026.10.1/src/core/engines/noweb/session.noweb.core.ts#L1080-L1100), and [LID-preserving JID conversion](https://github.com/devlikeapro/waha/blob/2026.10.1/src/core/utils/jids.ts#L56-L68); official [send-message documentation](https://waha.devlike.pro/docs/how-to/send-messages/#chatid) lists LID chat targets. This establishes source-contract support, not acceptance or delivery on the deployed instance.
+
+**Live acceptance remains UNVERIFIED:** No live `WAHA_BASE_URL` / `WAHA_API_KEY` is configured in this environment. After deploying the reviewed fix to the existing service, send `yojana` from a controlled personal LID account, confirm its exact `chatId` is submitted to `/api/sendText`, inspect the actual response and confirm menu receipt on that same handset. Repeat the event without another reply, try another controlled sender, and verify STOP/voice notes. A successful send API response alone is not delivery evidence. No live message was sent, no session was re-paired, and nothing was pushed or deployed by this change.
 
 ---
 

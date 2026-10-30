@@ -143,7 +143,11 @@ def persistent_event(body):
     if isinstance(mid, dict):
         mid = mid.get('_serialized') or mid.get('id')
     if (body.event != 'message' or body.session != expected_session or not isinstance(chat, str)
-            or not re.fullmatch(r'\d{6,16}@c\.us', chat) or p.get('fromMe') or p.get('participant') or p.get('isGroup') or p.get('broadcast')
+            # NOWEB emits personal senders as either phone JIDs or opaque LIDs.
+            # Keep the exact address (including suffix) for hashing and replies;
+            # a LID must never be guessed/rewritten into a phone-number JID.
+            or not re.fullmatch(r'(?:[0-9]{6,16}@c\.us|[0-9]{1,20}@lid)', chat)
+            or p.get('fromMe') or p.get('participant') or p.get('isGroup') or p.get('broadcast')
             or not isinstance(text, str) or (not text.strip() and not p.get('hasMedia')) or not isinstance(mid, str) or not mid):
         return {'status': 'ignored'}
     if len(text) > 1800 or len(mid) > 500:
