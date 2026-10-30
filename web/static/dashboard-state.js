@@ -11,11 +11,16 @@
  const refineButton=make('button','Refine results','light');refineButton.id='refine-results';
  const grid=make('div','','match-grid');grid.id='saved-matches';
  panel.append(make('h2','Your Scheme Matches'),date,refreshButton,refineButton,grid);bar.after(panel);
+ const freshButton=make('button','Fresh start for another citizen','light');freshButton.id='fresh-assessment';
+ const continueButton=make('button','Continue this saved case','light');continueButton.id='continue-assessment';
+ panel.insertBefore(freshButton,grid);panel.insertBefore(continueButton,grid);let continuing=false,restoredCase=false;
+ freshButton.onclick=()=>{if(busy)return;continuing=false;restoredCase=false;clear();document.querySelector('#chat-status').textContent='New citizen assessment. No previous facts will be reused.';document.querySelector('#message').focus()};
+ continueButton.onclick=()=>{continuing=true;document.querySelector('#chat-status').textContent='Continuing the displayed authorized case. Use Refine to correct facts.'};
  const historyPanel=make('section','','card');historyPanel.id='citizen-history';content.append(historyPanel);
  function cards(value){if(Array.isArray(value))return value;if(value?.schemes)return value.schemes;return [value?.start_with,...(value?.others||[]),...(value?.needs_information||[])].filter(Boolean)}
  function source(url){try{const u=new URL(url);if(u.protocol!=='https:')return null;const a=make('a','Read the source and verify requirements ↗');a.href=u.href;a.target='_blank';a.rel='noopener noreferrer';return a}catch{return null}}
  function article(c,index){const box=make('article','','citizen-result');
-  box.append(make('h3',`${index+1}. ${c.name}`),make('span',(c.status||'Needs verification').replaceAll('_',' '),'citizen-status'),make('p',c.benefit||'Confirm benefit details at the source.'));
+  box.append(make('h3',`${index+1}. ${c.name}`),make('span',(c.status_label||(['eligible_check_manually','check_manually'].includes(c.status)?'Needs verification':(c.status||'Needs verification').replaceAll('_',' '))),'citizen-status'),make('p',c.benefit||'Confirm benefit details at the source.'));
   if(c.missing_requirements?.length)box.append(make('p','Missing requirements: '+c.missing_requirements.map(f=>f.replaceAll('_',' ')).join(', ')));
   for(const step of c.next_steps||[])box.append(make('p','Next: '+step,'citizen-next'));
   const detail=make('details');detail.append(make('summary','Evidence and caveats'),make('p',c.why||'Eligibility has not been confirmed.'));
@@ -46,18 +51,18 @@
   inflight=(async()=>{try{const r=await previous('/api/cases/'+encodeURIComponent(saved)+'?optional=true',{cache:'no-store'});
    if(!r.ok){if([403,404].includes(r.status)){clear(true);return}throw Error()}
    const data=await r.json();if(version!==revision)return;if(!data.available){clear(true);return}
-   sid=data.id;facts(data.profile);document.querySelector('#chat').replaceChildren();for(const m of data.messages||[])bubble(m.content,m.role==='user'?'user':'bot');
+   if(sid!==data.id)continuing=false;sid=data.id;restoredCase=true;facts(data.profile);document.querySelector('#chat').replaceChildren();for(const m of data.messages||[])bubble(m.content,m.role==='user'?'user':'bot');
    render(data.recommendations||data.latest_voice_summary,data.assessment_date);renderHistory(data);activity('Saved conversation restored. Continue chatting or refine your results.');
   }catch{if(version===revision)date.textContent='Saved results are temporarily unavailable. Your case is retained; use Refresh.'}finally{refreshButton.disabled=false;inflight=null}})();return inflight
  }
  window.YojanaCase={refresh:restore};refreshButton.onclick=restore;
- refineButton.onclick=()=>{refining=true;go('assistant');document.querySelector('#message').focus();document.querySelector('#chat-status').textContent='Add or correct details to refine your results.'};
+ refineButton.onclick=()=>{refining=true;continuing=true;go('assistant');document.querySelector('#message').focus();document.querySelector('#chat-status').textContent='Add or explicitly correct details in this case.'};
  const select=document.querySelector('#lang');select?.addEventListener('change',()=>manual=select.value!=='auto');
  window.fetch=async(url,options={})=>{const path=String(url);
-  if(path==='/api/v2/conversation'&&options.body){const body=JSON.parse(options.body);body.language_override=manual;body.refine=refining;options={...options,body:JSON.stringify(body)}}
+  if(path==='/api/v2/conversation'&&options.body){const body=JSON.parse(options.body);if(restoredCase&&!continuing){body.session_id=null;restoredCase=false;sid=null;facts({});document.querySelector('#chat').replaceChildren();render(null)}body.language_override=manual;body.refine=refining;options={...options,body:JSON.stringify(body)}}
   const response=await previous(url,options);
   if(path==='/api/v2/conversation'&&response.ok){const data=await response.clone().json();revision++;refining=false;
-   setTimeout(()=>{render(data.recommendations||data.results,Date.now()/1000);if(data.assessment_complete)document.querySelector('#chat-status').textContent='Assessment complete. Review your matches or refine your results.'},0)
+   continuing=true;setTimeout(()=>{render(data.recommendations||data.results,Date.now()/1000);if(data.assessment_complete)document.querySelector('#chat-status').textContent=data.assessment?.provisional?'Provisional results saved. More details or official verification are useful.':'Assessment complete. Review your matches or refine your results.'},0)
   }else if(path.startsWith('/api/v2/conversation/')&&options.method==='DELETE'&&response.ok)setTimeout(()=>clear(),0);
   return response
  };

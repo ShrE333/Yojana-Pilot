@@ -133,10 +133,12 @@ class Turn(BaseModel):
 def turn(cid: str, body: Turn, request: Request):
     require_store()
     from .conversation_api import conversation, Message
+    from core.assessment import POLICY_VERSION
     with case_store.transaction('voice:'+cid) as tx:
         row = call(tx, cid, owner(request))
         transcript = json.loads(row['transcript'])
         if (transcript and transcript[-1].get('request_id') == body.request_id
+                and transcript[-1].get('result',{}).get('assessment',{}).get('policy_version')==POLICY_VERSION
                 and (row['status']=='active' or transcript[-1].get('result',{}).get('assessment_complete'))):
             if transcript[-2]['text'] != redact(body.text):
                 raise HTTPException(409, 'Request ID conflict')
@@ -166,23 +168,36 @@ def turn(cid: str, body: Turn, request: Request):
         return result
 
 
+def safe_snapshot(snapshot):
+    """Do not replay unsafe eligibility claims from pre-hotfix saved summaries."""
+    from copy import deepcopy
+    from core.assessment import POLICY_VERSION
+    if not snapshot or snapshot.get('assessment',{}).get('policy_version')==POLICY_VERSION:
+        return snapshot
+    result=deepcopy(snapshot)
+    warning='Historical snapshot predates the eligibility safety update. Reassess this beneficiary; no eligibility or approval is confirmed.'
+    result['caveat']=warning
+    for card in result.get('schemes',[]):
+        if card.get('status') in ('eligible','eligible_check_manually'):
+            card.update(status='check_manually',status_label='Needs verification',why=warning)
+        card['check_yourself']=list(card.get('check_yourself',[]))+[warning]
+    return result
+
+
 def summary_for(state):
+    from core.assessment import POLICY_VERSION, relevant_catalog, decide
     if not state.get('profile'):
         return {'schemes': [], 'caveat':'More information is needed; no scheme eligibility has been confirmed.',
                 'government_submission':False}
-    if state.get('assessment'):
+    if state.get('assessment',{}).get('policy_version')==POLICY_VERSION:
         return {'schemes':state['assessment']['recommendations'],
                 'caveat':'Guidance only; check missing conditions and official sources.',
                 'assessment':state['assessment'],'government_submission':False}
     profile = {**state.get('profile', {}), '_intent': state.get('intent_context', {})}
-    from core.assessment import relevant_catalog
-    shortlist = build_shortlist(profile, relevant_catalog(profile,load_catalog()))
-    cards, seen = [], set()
-    for item in [shortlist.get('start_with')] + shortlist.get('others', []) + shortlist.get('needs_information', []):
-        if item and item['id'] not in seen:
-            seen.add(item['id'])
-            cards.append(item)
-    return {'schemes': cards[:5], 'caveat': 'Guidance only; confirm official eligibility and missing requirements before applying.',
+    catalog=relevant_catalog(profile,load_catalog())
+    assessment=decide(profile,catalog,build_shortlist(profile,catalog),state.get('question_count',0))
+    assessment.pop('next_candidate',None)
+    return {'schemes': assessment['recommendations'], 'assessment':assessment,'caveat': 'Guidance only; confirm official eligibility and missing requirements before applying.',
             'government_submission': False}
 
 
@@ -197,7 +212,7 @@ def end(cid: str, body: End, request: Request):
         row = call(tx, cid, owner(request))
         tx.lock(row['session_id'])
         if row['summary']:
-            snapshot = json.loads(row['summary'])
+            snapshot = safe_snapshot(json.loads(row['summary']))
         else:
             state = tx.session(row['session_id'], owner(request))['state']
             snapshot = summary_for(state)
@@ -224,7 +239,7 @@ def history(cid: str, request: Request):
         row = call(tx,cid,owner(request))
         queued = tx.execute('SELECT status,attempts FROM summary_outbox WHERE call_id=?',(cid,)).fetchone()
         return {'call_id':cid,'status':row['status'],'transcript':[{'role':m['role'],'text':m['text']} for m in json.loads(row['transcript'])],
-                'summary':json.loads(row['summary']) if row['summary'] else None,
+                'summary':safe_snapshot(json.loads(row['summary'])) if row['summary'] else None,
                 'whatsapp':dict(queued) if queued else {'status':'not_requested'},'recipient_delivery_verified':False}
 
 
@@ -320,10 +335,10 @@ def deliver_summaries():
             except HTTPException:
                 tx.execute("UPDATE summary_outbox SET status='cancelled' WHERE call_id=?",(row['id'],))
                 continue
-            snapshot = json.loads(row['summary'])
+            snapshot = safe_snapshot(json.loads(row['summary']))
             lines = ['Your Yojana-Pilot shortlist (guidance, not approval):']
             for index, item in enumerate(snapshot['schemes'],1):
-                lines += [f"{index}. {item['name']} — {item['status']}", 'Missing: '+', '.join(item.get('missing_requirements',[]))]
+                lines += [f"{index}. {item['name']} — {item.get('status_label',item['status'])}", 'Missing: '+', '.join(item.get('missing_requirements',[]))]
                 if item.get('benefit'):
                     lines.append(item['benefit'][:300])
                 url = item.get('source_url','')

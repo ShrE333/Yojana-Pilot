@@ -1,5 +1,9 @@
 # Yojana-Pilot V2.4 deployment
 
+AgentX candidate: [local acceptance results, live prerequisites and judge script](docs/AGENTX_DEMO.md). Do not infer a successful live deployment from mocked/local checks.
+
+Release-blocking V2.5 school-cohort, identity and audio fixes: read [the exact catalog audit and staging checklist](docs/HOTFIX_V25_AUDIT.md). Fresh Start creates a separate citizen case; Continue saved case is explicit. Provisional/manual results are never confirmed eligibility. This hotfix adds no migration or required environment variable. Do not publish before reviewing these changes and completing real PostgreSQL/provider/mobile checks.
+
 V2.5 automatic assessment, durable voice finalization, authorized dashboard restoration and speech fallback are documented in [the V2.5 runbook](docs/V25_CITIZEN_EXPERIENCE.md#automatic-assessment-and-restored-results). These fixes need no new migration or required secret. The optional `ASSESSMENT_QUESTION_BUDGET` defaults to seven. Verify real PostgreSQL and hosted speech/inference in staging before deployment; local mocked tests do not establish external connectivity.
 
 V2.5 citizen experience, browser voice, one-use WhatsApp handoff and consent-based summaries are implemented on `feature/v2.5-citizen-experience`. Read [the V2.5 runbook](docs/V25_CITIZEN_EXPERIENCE.md) for migrations, server-only speech settings, language coverage, local commands and required live checks. The V2.4 infrastructure guidance below remains applicable; V2.5 adds a bounded summary worker and never deploys LiveKit or native phone calling.

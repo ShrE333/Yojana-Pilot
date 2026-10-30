@@ -1,5 +1,9 @@
 # Yojana-Pilot
 
+## AgentX demo candidate
+
+See [the 90-second demo, acceptance matrix and exact setup](docs/AGENTX_DEMO.md). Open `/app` for saved recommendations and `/voice` for browser voice. Tap **Interrupt / Speak Now** during an active reply. This is tap interruption, not hands-free acoustic barge-in. The local release remains unpushed/undeployed; live Groq/Sarvam, PostgreSQL and QR-paired WAHA require the runbook checks.
+
 V2.5 citizen experience is implemented locally on `feature/v2.5-citizen-experience`: intent-aware recommendations, browser voice and secure WhatsApp case handoff with consent-based summaries. See [the V2.5 runbook](docs/V25_CITIZEN_EXPERIENCE.md) for local commands, migrations, coverage limits and required live verification. Nothing has been pushed or deployed by this implementation.
 
 V2.4 deployment infrastructure is prepared on `feature/v2.4-live-ai-waha`; it has not been deployed. See [DEPLOYMENT.md](DEPLOYMENT.md) for Vercel, EasyPanel Docker, PostgreSQL, WAHA and live validation instructions. The 237-test V2.3 baseline below is preserved; current validation is recorded in PROGRESS.md. Production case persistence requires the documented runtime configuration.
@@ -41,7 +45,7 @@ Two supporting rules follow from it:
 | Eligibility rules | 496 |
 | Official sites mapped | 45 Maharashtra departments and Zilla Parishads |
 | Scheme pages found | 920 (526 still waiting to be read) |
-| Tests | **237 passing, all offline** (no network, no API keys needed) |
+| Tests | **312 passed, 1 PostgreSQL test skipped** (no network, no API keys needed) |
 
 **Verified status.** Public landing page, citizen dashboard, Rescue Mode, conversation API and WAHA adapter are integrated. The offline suite and desktop/mobile browser checks pass. Model extraction requires your configured provider; hosted-model and external WhatsApp delivery are not part of the offline validation. Scraped rules remain unverified until reviewed. This is independent guidance, not a government service.
 

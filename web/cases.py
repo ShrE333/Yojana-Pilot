@@ -39,16 +39,32 @@ def _get_case(sid, request):
     persistent()
     with case_store.transaction(sid) as tx:
         row = tx.session(sid, owner(request))
+        from core.assessment import POLICY_VERSION, relevant_catalog, decide
+        from discovery.catalog import load_catalog
+        from saathi.shortlist import build_shortlist
+        assessment=row['state'].get('assessment') or {}
+        refreshed=None
+        if row['state'].get('profile') and assessment.get('policy_version')!=POLICY_VERSION:
+            # Old deployed snapshots must not restore unsafe eligibility labels.
+            # Re-evaluate deterministically, without calling an LLM or rewriting history.
+            profile={**row['state']['profile'],'_intent':row['state'].get('intent_context',{}),'_asked':row['state'].get('asked',[])}
+            catalog=relevant_catalog(profile,load_catalog())
+            assessment=decide(profile,catalog,build_shortlist(profile,catalog),row['state'].get('question_count',0))
+            assessment.pop('next_candidate',None)
+            refreshed={'schemes':assessment['recommendations']}
         completed=tx.execute("SELECT id,summary,ended_at FROM voice_calls WHERE session_id=? AND status='ended' AND summary IS NOT NULL ORDER BY ended_at DESC LIMIT 1",(sid,)).fetchone()
-        summary=json.loads(completed['summary']) if completed else None
+        from .voice import safe_snapshot
+        summary=safe_snapshot(json.loads(completed['summary'])) if completed else None
         # A newer chat refinement supersedes an older saved voice assessment.
-        use_voice=bool(completed and (not row['state'].get('last_response',{}).get('results')
+        use_voice=bool(completed and summary.get('assessment',{}).get('policy_version')==POLICY_VERSION and refreshed is None and (not row['state'].get('last_response',{}).get('results')
                                       or completed['ended_at']>=row['state'].get('updated',0)))
         recommendations=({'schemes':summary.get('schemes',[])} if use_voice else
-                         row['state'].get('last_response',{}).get('results'))
+                         {'schemes':row['state'].get('last_response',{}).get('recommendations',[])} if row['state'].get('last_response',{}).get('recommendations') is not None else row['state'].get('last_response',{}).get('results'))
+        if refreshed is not None:
+            recommendations=refreshed
         return {'available': True, 'id': sid, 'profile': row['state'].get('profile', {}),
                 'recommendations': recommendations,'latest_voice_summary':summary,
-                'assessment':row['state'].get('assessment'),
+                'assessment':assessment,
                 'assessment_date':completed['ended_at'] if use_voice else row['state'].get('updated',row['updated_at']),
                 'voice_sessions': [dict(r) for r in tx.execute('SELECT id,status,created_at,ended_at FROM voice_calls WHERE session_id=? ORDER BY created_at DESC LIMIT 10',(sid,))],
                 'pending_question': row['state'].get('pending'), 'status': row['status'],

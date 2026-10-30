@@ -60,10 +60,10 @@ def check(url):
             page.locator('#voice-mute').click()
             assert page.locator('#voice-mute').get_attribute('aria-pressed')=='true'
             page.reload()
-            page.locator('#voice-start').click()
+            page.locator('#voice-continue').click()  # Fresh start deliberately creates another citizen case.
             page.wait_for_function("document.querySelectorAll('#voice-transcript .turn').length===2")
             page.locator('#voice-end').click()
-            page.wait_for_function("document.querySelector('#voice-state').textContent==='Session ended'")
+            page.wait_for_function("document.querySelector('#voice-state').textContent==='Completed'")
             assert 'No WhatsApp summary requested' in page.locator('#summary-status').inner_text()
             assert page.request.get(root+'/api/inference/status').json()['state']=='mocked'
             page.screenshot(path=str(out/f'summary-{lang}.png'),full_page=True)
@@ -84,7 +84,7 @@ window.SpeechRecognition=class {start(){this.onstart?.();setTimeout(()=>{const r
         page.locator('#voice-listen').click()
         page.wait_for_function("document.querySelectorAll('#voice-transcript .turn').length===2")
         assert 'I am 62 in Maharashtra' in page.locator('#voice-transcript').inner_text()
-        page.locator('#voice-end').click();page.wait_for_function("document.querySelector('#voice-state').textContent==='Session ended'")
+        page.locator('#voice-end').click();page.wait_for_function("document.querySelector('#voice-state').textContent==='Completed'")
         print('Recognition success event: transcript reaches the authorized real engine endpoint (simulated recognition, mocked model)')
         page.close();browser.close()
 

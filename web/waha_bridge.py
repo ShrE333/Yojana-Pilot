@@ -217,10 +217,10 @@ def persistent_event(body):
                 reply = 'Welcome to Yojana-Pilot! Choose 1 Chat or 2 Call (a browser voice session, not a phone call). You can also type your question. Reply CALL to switch later. Do not send identity, bank or phone numbers. Reply STOP to leave. Guidance only, not a government service.'
             elif not mapping or not mapping['opted_in']:
                 status = 'not_opted_in'
-            elif command == 'chat' or (command == '1' and awaiting):
+            elif command == 'chat' or (command in ('1', '1 chat') and awaiting):
                 tx.execute("INSERT INTO channel_preferences VALUES(?,'chat') ON CONFLICT(chat_hash) DO UPDATE SET mode='chat'",(chat_hash,))
                 status, reply = 'chat_selected', 'Chat selected. Describe the help you need and your situation. Reply CALL for browser voice or STOP to leave.'
-            elif command == 'call' or (command == '2' and awaiting):
+            elif command == 'call' or (command in ('2', '2 call') and awaiting):
                 tx.execute("INSERT INTO channel_preferences VALUES(?,'voice') ON CONFLICT(chat_hash) DO UPDATE SET mode='voice'",(chat_hash,))
                 from .voice import new_channel_case, handoff
                 sid = mapping['session_id']

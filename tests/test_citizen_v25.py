@@ -202,7 +202,7 @@ def test_summary_consent_can_be_cancelled_and_renewed(persistent,monkeypatch):
 def pcm():
     stream=io.BytesIO()
     with wave.open(stream,'wb') as out:
-        out.setnchannels(1);out.setsampwidth(2);out.setframerate(16000);out.writeframes(b'\0\0'*1600)
+        out.setnchannels(1);out.setsampwidth(2);out.setframerate(16000);out.writeframes(b'\0\x10\0\xf0'*800)  # non-silent synthetic tone
     return stream.getvalue()
 
 

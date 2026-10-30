@@ -27,7 +27,7 @@ from .privacy import redact
 from core.relevance import intent_from_text
 from core.languages import normalize, ROWS
 from pydantic import field_validator
-from core.assessment import relevant_catalog, decide, conclusion, final_answer
+from core.assessment import POLICY_VERSION, relevant_catalog, decide, conclusion, final_answer
 from .metrics import record
 
 router = APIRouter(tags=["Conversation Beta"])
@@ -43,6 +43,14 @@ SENSITIVE = [
 ]
 
 QUESTION_TEXT = {
+    "age": {"hi": "आपकी उम्र कितनी है?", "mr": "तुमचे वय किती आहे?"},
+    "current_study_level": {"hi": "आप अभी किस स्तर की पढ़ाई कर रहे हैं?", "mr": "तुम्ही सध्या कोणत्या स्तरावर शिक्षण घेत आहात?"},
+    "course_name": {"hi": "आपके पाठ्यक्रम का नाम क्या है?", "mr": "तुमच्या अभ्यासक्रमाचे नाव काय आहे?"},
+    "course_year": {"hi": "आप पाठ्यक्रम के किस वर्ष में हैं?", "mr": "तुम्ही अभ्यासक्रमाच्या कितव्या वर्षात आहात?"},
+    "enrolled_grade": {"hi": "आप अभी किस कक्षा में पढ़ते हैं?", "mr": "तुम्ही सध्या कितवीत शिकता?"},
+    "school_management": {"hi": "आपका स्कूल सरकारी, सहायता प्राप्त या निजी है?", "mr": "तुमची शाळा सरकारी, अनुदानित की खाजगी आहे?"},
+    "social_category": {"hi": "आपकी सामाजिक श्रेणी क्या है? नहीं जानते तो बता सकते हैं।", "mr": "तुमचा सामाजिक प्रवर्ग कोणता आहे? माहीत नसल्यास तसे सांगा."},
+    "is_bpl": {"hi": "क्या आपका परिवार आधिकारिक बीपीएल सूची में है?", "mr": "तुमचे कुटुंब अधिकृत दारिद्र्यरेषेखालील यादीत आहे का?"},
     "is_student": {"hi": "क्या आप अभी पढ़ाई कर रहे हैं?", "mr": "तुम्ही सध्या शिक्षण घेत आहात का?"},
     "occupation": {"hi": "आप अभी क्या काम करते हैं?", "mr": "तुम्ही सध्या कोणते काम करता?"},
     "annual_family_income_inr": {"hi": "आपके परिवार की सालाना आय कितनी है?", "mr": "तुमच्या कुटुंबाचे वार्षिक उत्पन्न किती आहे?"},
@@ -64,11 +72,23 @@ def _question_text(q: dict, lang: str) -> str:
     return localized or q["text"]
 
 
+def _spoken_conclusion(decision, language):
+    # Fixed guidance only: never translate scheme names, amounts or eligibility
+    # predicates with an LLM. Full evidence remains visible in the saved cards.
+    if language == 'hi':
+        return 'आपका आकलन सहेजा गया है। संभावित योजनाएँ, बाकी शर्तें और आधिकारिक स्रोत स्क्रीन पर देखें। यह सरकारी पात्रता या स्वीकृति की पुष्टि नहीं है।'
+    if language == 'mr':
+        return 'तुमचे मूल्यांकन जतन केले आहे. संभाव्य योजना, उर्वरित अटी आणि अधिकृत स्रोत स्क्रीनवर पाहा. ही सरकारी पात्रता किंवा मंजुरीची पुष्टी नाही.'
+    return conclusion(decision['recommendations'], decision.get('provisional', True))
+
+
 class Message(BaseModel):
     text: str = Field(min_length=1, max_length=1800)
     lang: str = 'en'
     language_override: bool = False
     refine: bool = False
+    correct_facts: bool = False
+    new_beneficiary: bool = False
     session_id: str | None = Field(default=None, max_length=64)
     request_id: str | None = Field(default=None, min_length=8, max_length=80)
 
@@ -150,7 +170,8 @@ def _conversation(body, access_token, trusted, tx):
     if body.request_id and state.get('last_request_id') == body.request_id:
         if state.get('request_hash') != case_store.digest(body.text):
             raise HTTPException(409, 'Request ID already used for a different message')
-        return state['last_response']
+        if state.get('last_response',{}).get('assessment',{}).get('policy_version')==POLICY_VERSION:
+            return state['last_response']
 
     original_profile = dict(state['profile'])
     if body.refine:
@@ -177,6 +198,15 @@ def _conversation(body, access_token, trusted, tx):
         return result
 
     text = _safe_message(body.text)
+    # A dependent is a separate beneficiary, never a blend of the parent's facts.
+    dependent = body.new_beneficiary or (state.get('beneficiary_kind')!='dependent' and bool(re.search(r'\b(?:for my|my) (?:child|son|daughter|dependent)\b',text,re.I)))
+    if dependent:
+        archive=list(state.get('beneficiaries',[]))[-3:]
+        if state['profile']:
+            archive.append({'profile':state['profile'],'assessment':state.get('assessment'),'saved_at':time.time()})
+        state.update(profile={},asked=[],pending=None,question_count=0,pending_repeats=0,
+                     assessment={},intent_context={},history=[],beneficiaries=archive,
+                     beneficiary_kind='dependent')
     state['intent_context'] = intent_from_text(text, state.get('intent_context'))
 
     started=time.perf_counter()
@@ -199,6 +229,22 @@ def _conversation(body, access_token, trusted, tx):
     # A changed fact is not silently accepted; citizens can correct it explicitly.
     changes = {k: {"previous": state["profile"][k], "new": v} for k, v in cleaned.items()
                if k in state["profile"] and state["profile"][k] != v}
+    identity_changes = set(changes) & {'age','is_student','occupation','current_study_level'}
+    explicit_correction = body.correct_facts or body.refine or bool(re.search(
+        r'correct|actually|mistake|changed|update|instead|rather|सुधार|दुरुस्त|चूक|गलती',text,re.I))
+    if identity_changes and not explicit_correction:
+        raise HTTPException(409, {'code':'identity_correction_required',
+                                 'message':'These details describe a different life stage. Choose Fresh start for another citizen, or Refine results and explicitly correct this case.'})
+    if identity_changes:
+        # Related facts from the old life stage cannot survive an age/student correction.
+        for field in ('is_student','occupation','current_study_level','course_name','course_year','enrolled_grade','school_management'):
+            if field not in cleaned:
+                state['profile'].pop(field,None)
+        state.update(asked=[],pending=None,question_count=0,pending_repeats=0,assessment={})
+        state.pop('last_response',None)
+        state['intent_context'] = intent_from_text(text)
+        if getattr(parsed,'requested_category',None):
+            state['intent_context']['categories']=[parsed.requested_category]
     state["profile"].update(cleaned)
     if state.get('assessment',{}).get('assessment_complete') and (state['profile']!=original_profile or getattr(parsed,'requested_category',None)):
         state.update(asked=[],pending=None,question_count=0,pending_repeats=0)
@@ -239,7 +285,10 @@ def _conversation(body, access_token, trusted, tx):
             "corrections": changes,
             "profile": state["profile"], "results": shortlist, 'language': state['lang'],
             'assessment_complete':decision['assessment_complete'],'assessment':decision,
-            'recommendations':decision['recommendations'],'spoken_text':answer[:360] if q else conclusion(decision['recommendations']),
+            'recommendations':decision['recommendations'],'spoken_text':answer[:360] if q else _spoken_conclusion(decision,state['lang']),
+            'speech_language':state['lang'] if state['lang'] in ('en','hi','mr') and (not q or
+                QUESTION_TEXT.get(q['field'],{}).get(state['lang']) or
+                (not q.get('synthetic') and q.get('text_'+state['lang']))) else 'en',
             'text_fallback': state['lang'] not in ('en','hi','mr'),
             "disclaimer": "Recommendations are informational; verify unreviewed schemes against official sources."})
 

@@ -47,6 +47,11 @@ SYSTEM += ('\nFor all Indian languages and mixed-language messages, return the m
            'The older hi/mr/en examples are examples, not a restriction on language detection.')
 SYSTEM += ('\nOptionally label requested_category as pension, income, education, agriculture, health, housing or employment '
            'only when explicitly requested, in any language. Use null when uncertain. A statement of being not a student is not a request for scholarships.')
+SYSTEM += ('\nExtract only the intended beneficiary. A dependent has a separate profile: never copy a parent age, income, '
+           'caste, religion or occupation onto the child. A college student is not a school pupil. '
+           'Extract current_study_level, enrolled_grade, course_name and course_year only if explicitly stated. '
+           'Do not fill prior facts into the new facts object unless explicitly restated. '
+           'The Python engine, not the model, validates completion and eligibility.')
 
 
 def understanding_schema() -> dict:

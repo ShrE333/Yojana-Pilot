@@ -30,7 +30,7 @@ def check(url):
                 break
             page.wait_for_function("!document.querySelector('#voice-send').disabled")
         assert completed['assessment_complete'] and completed['voice_finalized']
-        page.wait_for_function("document.querySelector('#voice-state').textContent==='Session ended'")
+        page.wait_for_function("document.querySelector('#voice-state').textContent==='Completed'")
         assert page.locator('#voice-summary .summary-card').count()>0
         saved_id=completed['session_id']
         page.goto(root+'/app')
@@ -81,7 +81,7 @@ window.Audio=class {play(){window.audioPlayed++;setTimeout(()=>this.onended?.(),
             page.wait_for_function('(n)=>window.audioPlayed+window.deviceSpoken.length>=n',arg=index+1)
         assert counter['tts']==3 and page.evaluate('window.deviceSpoken.length')>=3
         assert page.locator('#voice-transcript').inner_text().count('A short response is ready.')==5
-        page.locator('#voice-end').click();page.wait_for_function("document.querySelector('#voice-state').textContent==='Session ended'")
+        page.locator('#voice-end').click();page.wait_for_function("document.querySelector('#voice-state').textContent==='Completed'")
         print('Two successful audio turns followed by exhausted credits: automatic device fallback, no repeated server TTS and manual end passed (simulated audio)')
         page.close();browser.close()
 

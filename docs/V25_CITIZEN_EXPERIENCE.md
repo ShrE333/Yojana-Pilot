@@ -1,5 +1,7 @@
 # V2.5 citizen experience: local release and verification
 
+See [the V2.5 critical hotfix audit](HOTFIX_V25_AUDIT.md) for source-backed school-cohort rules, unreviewed eligibility safeguards, explicit fresh/continue identity handling and direct device-audio fallback with Replay. These safeguards supersede the earlier permissive completion behavior. No new migration or required environment setting is introduced.
+
 ## Automatic assessment and restored results
 
 Python now bounds assessment to relevant geographic/intent candidates and stops on useful coverage, low question value, exhausted useful questions or a question budget. An extractor completion suggestion cannot bypass this policy. Unknown conditions remain explicit; completion is not official eligibility approval. Default question budget is seven, optionally configured with `ASSESSMENT_QUESTION_BUDGET` (1–12). Repeated prompts are bounded. Chat, WhatsApp and browser voice share this policy and return `assessment_complete`, structured recommendations and a short `spoken_text`.

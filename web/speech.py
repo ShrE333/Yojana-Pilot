@@ -73,8 +73,18 @@ def tts(text, language):
         audio = base64.b64decode(data['audios'][0], validate=True)
         if len(audio) > 1500000 or not audio.startswith(b'RIFF'):
             raise ValueError()
+        with wave.open(io.BytesIO(audio),'rb') as wav:
+            if (wav.getnchannels() not in (1,2) or not 8000<=wav.getframerate()<=48000
+                    or not 0<wav.getnframes()<=45*wav.getframerate()):
+                raise ValueError()
+            frames=wav.readframes(wav.getnframes())
+            if len(frames)!=wav.getnframes()*wav.getnchannels()*wav.getsampwidth():
+                raise ValueError()
+            if not any(frames) or (wav.getsampwidth()==1 and all(b==128 for b in frames)):
+                record('tts',0,'fallback')
+                raise HTTPException(502,{'code':'silent_speech_response','fallback':'device_voice_or_text'})
         return audio
-    except (KeyError, IndexError, ValueError, TypeError):
+    except (KeyError, IndexError, ValueError, TypeError, wave.Error, EOFError):
         raise HTTPException(502, {'code': 'invalid_speech_response'})
 
 

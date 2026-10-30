@@ -12,13 +12,33 @@ This file is the project's history, newest entry first. Read it top to bottom to
 |---|---|
 | Version | v2.5 citizen experience (not deployed) |
 | Last updated | 2026-10-30 |
-| Tests | 295 passed, 1 skipped, 0 failed (real PostgreSQL requires an external test server) |
-| Phase | Bounded automatic assessment, durable voice finalization, dashboard restoration and resilient speech fallback |
+| Tests | 312 passed, 1 skipped, 0 failed (real PostgreSQL requires an external test server) |
+| Phase | AgentX release candidate: preserved cohort hotfixes, tap interruption, consent and multilingual demo acceptance |
 | Schemes | 267 public scheme records; 1,008 crawl records; catalog preserved unchanged |
 | Eval | eligibility 36/36 on 12 personas; start-with 12/12; name matcher P=1.00 R=1.00 on 20 pairs (small self-labelled sets) |
 | Next task | Owner review/publication; Docker and PostgreSQL validation; EasyPanel/Vercel setup and genuine hosted inference/WAHA checks |
 
 ---
+
+## AgentX candidate: 2026-10-30: reliable tap interruption and verified local demo
+**Who:** Codex with repository-owner instructions
+**Goal:** Finish the smallest reliable demo while preserving all uncommitted V2.5 hotfix work.
+
+**Changed**
+- Preserved source-audited cohort, eligibility, completion, relevance, citizen-isolation and snapshot safety changes. Recovery binary patches plus untracked source copies were saved outside the repository before implementation.
+- Added explicit Interrupt / Speak Now: synchronous cancellation of server audio/device synthesis, pending TTS abort, generation invalidation and immediate gesture-based listening. Capture epochs, duplicate-final guards and aborted STT prevent stale/duplicate turns. This is tap interruption, not acoustic hands-free barge-in.
+- Added visible Completed state, in-flight WhatsApp summary consent revocation and literal 1 Chat / 2 Call menu support. Recipient-bound queues and API-acceptance-only delivery wording are retained.
+- Added English/Hindi/Marathi synthetic multi-turn fixtures, relevant localized questions and brief fixed concluding speech. All 23 language entries remain; live coverage is unverified.
+- Synchronized all 19 public frontend assets, bumped frontend metadata to 2.5.1, added focused backend/browser regressions and AgentX acceptance/setup/judge documentation. No new database migration or paid service was introduced.
+
+**Tests:** 312 passed, 1 real-PostgreSQL test skipped, 0 failed; pip check, JavaScript checks, frontend build/sync and diff checks passed. Existing cohort/speech/citizen suites and the new interruption/consent suite passed. Actual local HTTP/readiness/SSE and automatic finalization/dashboard reload passed against mock extraction and an isolated SQLite adapter. All three migrations ran twice on that adapter. Five viewport sizes and English/Hindi/Marathi fixtures passed.
+
+**Decisions / limitations**
+- An initial follow-up test run encountered a full Windows system-temp drive; using an ignored project-drive temp directory resolved it. The successful full run uses that location.
+- No real provider/database credentials, deployment URLs, Docker/PostgreSQL service or WAHA QR session were available. Real PostgreSQL, Groq/Sarvam, physical mobile audio, deployed proxies and actual recipient receipt remain UNVERIFIED. Mocked tests never establish live success.
+- Create one local feature-branch release commit after verification. Do not push, deploy, modify main, force-push, reset or merge unrelated branches. Intended backend/frontend source is the same release SHA on feature/v2.5-citizen-experience; live control-panel branch settings cannot be confirmed here.
+
+**Next:** Owner review of docs/AGENTX_DEMO.md, private EasyPanel configuration/QR pairing, real PostgreSQL and provider/mobile smoke checks, then explicit publication/deployment approval.
 
 ## v2.5: 2026-10-30: automatic assessment and resilient voice
 **Who:** Codex
@@ -34,6 +54,22 @@ This file is the project's history, newest entry first. Read it top to bottom to
 
 **Known issues / not done**
 - Real PostgreSQL persistence test skipped without an external test server. Hosted Groq/Sarvam, physical microphone/device audio and production proxy behavior require staging verification. No commit, push or deployment performed; no new migration or required environment variable.
+
+## v2.5: 2026-10-30: critical cohort, identity and audio hotfix
+**Who:** Codex
+**Goal:** Prevent school-only matches and incomplete rule data from falsely confirming eligibility; prevent mixed citizen facts and silent speech failure.
+
+**Changed**
+- Audited actual school nutrition/Navodaya catalog rows and official district pages. Added non-mutating source-backed class/enrollment/management overlays; preserved the public catalog and source URLs.
+- Unreviewed extraction cannot produce plain eligible. Manual matches cannot count as confirmed completion. Student course/year and useful income questions, pension relevance and program deduplication are explicit.
+- Fresh start creates a separate case; continuing is explicit. Identity corrections invalidate stale life-stage facts/results. Dependents use separate bounded profiles. Old persisted snapshots and retry caches cannot restore unsafe eligibility claims.
+- Audio decode errors use direct device fallback. Added Replay, autoplay/stall/timeout/error handling, final speech after ending, stale callback guards, fresh-summary clearing, and silent/empty WAV rejection.
+- Added actual-catalog, identity, legacy-snapshot and audio regressions, expanded local browser acceptance, and documented before/after outcomes in docs/HOTFIX_V25_AUDIT.md.
+
+**Tests:** 306 passed, 1 skipped; frontend build, synchronization, JavaScript syntax and diff checks passed. Local mocked browser checks cover actual college/senior cases, explicit continuation/fresh start, responsive English/Hindi/Marathi flows, automatic finalization/restoration, SSE and simulated speech failures/replay. No real inference or paid speech was called.
+
+**Known issues / not done**
+- Real PostgreSQL, provider connectivity/credits, physical mobile audio and production proxy require staging verification. Broader human audit of extracted catalog rules remains necessary. No migration/new environment variable, commit, push or deployment.
 
 ## Entry template
 
