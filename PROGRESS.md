@@ -10,13 +10,29 @@ This file is the project's history, newest entry first. Read it top to bottom to
 
 | | |
 |---|---|
-| Version | v2.5 citizen experience (not deployed) |
+| Version | v2.5 citizen experience (live deployment unverified) |
 | Last updated | 2026-10-30 |
-| Tests | 312 passed, 1 skipped, 0 failed (real PostgreSQL requires an external test server) |
-| Phase | AgentX release candidate: preserved cohort hotfixes, tap interruption, consent and multilingual demo acceptance |
+| Tests | 360 passed, 1 skipped, 0 failed (real PostgreSQL requires an external test server) |
+| Phase | AgentX final WhatsApp candidate: YOJANA activation, named Chat/Call, bounded voice notes, multilingual continuity and submission README |
 | Schemes | 267 public scheme records; 1,008 crawl records; catalog preserved unchanged |
 | Eval | eligibility 36/36 on 12 personas; start-with 12/12; name matcher P=1.00 R=1.00 on 20 pairs (small self-labelled sets) |
 | Next task | Owner review/publication; Docker and PostgreSQL validation; EasyPanel/Vercel setup and genuine hosted inference/WAHA checks |
+
+---
+
+## AgentX WhatsApp final: 2026-10-30
+
+**Who:** Codex, under repository-owner instructions.
+
+**Changed:** Preserved release `95b99fccaf6cee2e14471da7b9d0b289605075ae` on the existing feature branch. Unified development and signed persistent WhatsApp activation policy: exact normalized YOJANA/yojna/योजना only, localized plain-text Chat/Call list, numeric facts never menu commands, direct citizen messages only. Added trusted-origin authenticated bounded voice-note retrieval, in-memory ffmpeg OGG/Opus conversion and existing Sarvam STT integration. Media I/O releases the case transaction so STOP can revoke; version recheck prevents late audio restoring the case. Durable outbox dedup prevents repeated turns on retry. Added channel-language migration 004 and same-case language continuity into browser Call. Existing eligibility, browser interruption, privacy/security and case-storage code retained unchanged.
+
+**Documentation:** Replaced obsolete README with judge-facing features, workflow/architecture Mermaid diagrams, real local interface screenshots, setup/security details and honest evidence table. Added `docs/WHATSAPP_FINAL.md` with exact variables, engine-schema limitations, acceptance checklist and 90-second script. Public URLs, demo video and redacted live WhatsApp screenshot were not supplied; none fabricated.
+
+**Validation:** 360 passed, 0 failed, 1 real-PostgreSQL test skipped. Local real OGG/Opus decode and malformed/oversized/overlong rejection passed. Provider responses and WhatsApp sends mocked. Full frontend build, 19-asset synchronization, JavaScript syntax and pip checks passed. Real local HTTP/readiness/SSE, desktop/tablet/mobile and EN/HI/MR typed browser flows passed; microphone/audio events simulated. Interruption, stale STT/TTS, completion, restored dashboard and consent revocation browser checks passed. Release-file scan found only reviewed fake test/CI credentials. No databases, QR images, private links or secrets included.
+
+**Limitations:** No deployed origins, pinned running WAHA image/engine or live credentials available. Actual WAHA schema/QR session, Groq/Sarvam account calls, real PostgreSQL, container build and physical phone/recipient delivery remain UNVERIFIED. System TEMP drive was full; tests use ignored D-drive temp. An attempted removal of two disposable C-drive pytest caches was denied by Windows permissions; no project or recovery files removed. No push/deploy/main change.
+
+**Next:** Review the local release commit, privately configure the existing EasyPanel services, inspect the actual WAHA engine/schema and execute the external acceptance checklist. Keep backend/frontend on the same exact reviewed commit.
 
 ---
 

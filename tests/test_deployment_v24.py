@@ -48,7 +48,7 @@ def test_migrations_are_idempotent_and_ready(persistent):
     case_store.migrate()
     assert case_store.ready()
     with case_store.transaction() as tx:
-        assert tx.execute('SELECT COUNT(*) AS n FROM schema_migrations').fetchone()['n'] == 3
+        assert tx.execute('SELECT COUNT(*) AS n FROM schema_migrations').fetchone()['n'] == len(list((ROOT/'web/migrations').glob('*.sql')))
 
 
 def test_restart_persists_facts_pending_history_and_owner(persistent, monkeypatch):
@@ -151,13 +151,13 @@ def test_signed_waha_no_unsolicited_and_retry_outbox(persistent, monkeypatch):
     sender = Mock(side_effect=[httpx.ConnectError('fixture transport failure'), None])
     monkeypatch.setattr(waha, '_send', sender)
     client = TestClient(create_app())
-    assert signed(client, 'START', 'bad', signature=False).status_code == 403
+    assert signed(client, 'YOJANA', 'bad', signature=False).status_code == 403
     assert signed(client, 'hello', 'uninvited').json()['status'] == 'not_opted_in'
     assert signed(client, 'STOP', 'uninvited-stop').json()['status'] == 'not_opted_in'
-    assert signed(client, 'START', 'start').status_code == 503
+    assert signed(client, 'YOJANA', 'start').status_code == 503
     restarted = TestClient(create_app())
-    assert signed(restarted, 'START', 'start').json()['status'] == 'started'
-    assert signed(restarted, 'START', 'start').json()['status'] == 'duplicate'
+    assert signed(restarted, 'YOJANA', 'start').json()['status'] == 'started'
+    assert signed(restarted, 'YOJANA', 'start').json()['status'] == 'duplicate'
     assert sender.call_count == 2
     with case_store.transaction() as tx:
         assert tx.execute('SELECT COUNT(*) AS n FROM waha_chats').fetchone()['n'] == 1
@@ -171,7 +171,7 @@ def test_waha_mapping_survives_restart_and_stop_clears_case(persistent, monkeypa
     sender = Mock()
     monkeypatch.setattr(waha, '_send', sender)
     client = TestClient(create_app())
-    assert signed(client, 'START', 'start').json()['status'] == 'started'
+    assert signed(client, 'YOJANA', 'start').json()['status'] == 'started'
     restarted = TestClient(create_app())
     assert signed(restarted, 'I am 62', 'message').json()['status'] == 'replied'
     assert signed(restarted, 'I am 62', 'message').json()['status'] == 'duplicate'
@@ -254,9 +254,9 @@ def test_stop_cancels_previously_queued_waha_reply(persistent, monkeypatch):
     sender = Mock(side_effect=[httpx.ConnectError('fixture failure'), None])
     monkeypatch.setattr(waha, '_send', sender)
     client = TestClient(create_app())
-    assert signed(client, 'START', 'queued-start').status_code == 503
+    assert signed(client, 'YOJANA', 'queued-start').status_code == 503
     assert signed(client, 'STOP', 'stop').json()['status'] == 'stopped'
-    assert signed(client, 'START', 'queued-start').json()['status'] == 'cancelled'
+    assert signed(client, 'YOJANA', 'queued-start').json()['status'] == 'cancelled'
     assert sender.call_count == 2
 
 

@@ -1,3 +1,5 @@
+> Updated WhatsApp voice-note setup and release status: [WhatsApp final integration](WHATSAPP_FINAL.md).
+
 # AgentX submission candidate — 2026-10-30
 
 ## Release identity and recovery
@@ -14,7 +16,7 @@ PASS below describes the explicitly stated local test, not an external service a
 
 | # | Requirement | Local result and evidence | External/live result |
 |---|---|---|---|
-| 1 | WhatsApp START/menu | **PASS** signed webhook fixtures offer `1 Chat / 2 Call`; literal and numeric menu choices work | **UNVERIFIED** QR-paired WAHA |
+| 1 | WhatsApp YOJANA/menu | **PASS** signed webhook fixtures offer named `Chat / Call`; numbers remain conversation facts | **UNVERIFIED** QR-paired WAHA |
 | 2 | WhatsApp Chat | **PASS** shared conversation/eligibility pipeline; retries do not repeat fact mutation | **UNVERIFIED** Groq + actual WhatsApp |
 | 3 | WhatsApp Call link | **PASS** unique HTTPS fragment capability, same authorized case, at most 10-minute lifetime | **UNVERIFIED** actual mobile invitation |
 | 4 | One-time redemption | **PASS** expiry/replay/STOP/access grants and encrypted route fixtures | **UNVERIFIED** deployed HTTPS/cookie proxy |
@@ -77,7 +79,7 @@ The temp override avoids the full system temp drive encountered during validatio
 5. Vercel: use the reviewed candidate branch/commit, Root Directory `frontend`, Node 22, Build Command `node build.mjs`. Set only the real HTTPS `BACKEND_ORIGIN`. Verify `/api/*` forwarding preserves cookies and no-store headers. Both frontend and backend must run the same SHA.
 6. Run `python -m web.migrate` **twice** in the backend service; check readiness. With a separate disposable staging database, set `TEST_POSTGRES_URL` and run the real PostgreSQL test before claiming PostgreSQL acceptance. Never point that test at live citizen data.
 7. Execute `python scripts/deployment_smoke.py --url <actual-HTTPS-frontend-origin> --live-model` for synthetic extraction. Speak one synthetic English/Hindi/Marathi turn and hear each answer. Interrupt during the second spoken reply; confirm no old audio resumes and the next turn appears once. Review the authorized dashboard after reload and a backend restart.
-8. Pair WAHA yourself as below. Send START from a controlled account, try Chat, then CALL, open the private invitation and consent to the summary. Confirm the message on the same handset. Test duplicate events, STOP and invitation expiry. API acceptance alone is not recipient delivery evidence.
+8. Pair WAHA yourself as below. Send YOJANA from a controlled account, try Chat, then CALL, open the private invitation and consent to the summary. Confirm the message on the same handset. Test duplicate events, STOP and invitation expiry. API acceptance alone is not recipient delivery evidence.
 
 ### WAHA EasyPanel settings (reuse the existing service first)
 
@@ -108,7 +110,7 @@ Provider contracts were checked against primary references: [Groq OpenAI compati
 ## 90-second judge demonstration
 
 - **0–10s:** Open the public page. “Yojana-Pilot helps citizens understand possible government schemes. Code decides eligibility; AI extracts what the citizen states.” Select Hindi or Marathi.
-- **10–25s:** On a paired test WhatsApp account, send START, choose `1 Chat`, give a synthetic situation, and show a relevant follow-up. “Missing facts stay unknown.”
+- **10–25s:** On a paired test WhatsApp account, send YOJANA, choose `Chat`, give a synthetic situation, and show a relevant follow-up. “Missing facts stay unknown.”
 - **25–40s:** Send CALL and open its private HTTPS link. “One-time, ten-minute invitation; this continues the same authorized case.” Tap Start and Listen, allowing the microphone.
 - **40–55s:** While the assistant speaks, tap **Interrupt / Speak Now**, give a short correction and show the next turn once. “This is reliable tap interruption, not hands-free acoustic barge-in.”
 - **55–70s:** Show the completed/provisional scheme cards, missing conditions, documents and official sources. For the college persona, show that school meals/Class 5 admission are excluded. Contrast with the retired senior's pension-oriented guidance.

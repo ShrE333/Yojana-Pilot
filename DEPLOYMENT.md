@@ -1,5 +1,7 @@
 # Yojana-Pilot V2.4 deployment
 
+Latest WhatsApp release: [YOJANA activation, voice-note configuration, fourth migration and external acceptance](docs/WHATSAPP_FINAL.md). Follow this additive configuration before enabling voice notes; the historical V2.4/V2.5 notes below do not establish a live deployment.
+
 AgentX candidate: [local acceptance results, live prerequisites and judge script](docs/AGENTX_DEMO.md). Do not infer a successful live deployment from mocked/local checks.
 
 Release-blocking V2.5 school-cohort, identity and audio fixes: read [the exact catalog audit and staging checklist](docs/HOTFIX_V25_AUDIT.md). Fresh Start creates a separate citizen case; Continue saved case is explicit. Provisional/manual results are never confirmed eligibility. This hotfix adds no migration or required environment variable. Do not publish before reviewing these changes and completing real PostgreSQL/provider/mobile checks.

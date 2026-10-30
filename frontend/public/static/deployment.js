@@ -42,7 +42,7 @@
   const status = document.querySelector('#case-status');
   if (status) status.textContent = 'No investigation started. Saved cases follow the server retention policy.';
   for (const notice of document.querySelectorAll('#page-channels .notice')) {
-    if (notice.textContent.includes('An administrator')) notice.textContent = 'An administrator configures and pairs the separate WAHA service. Its API and dashboard require authentication. Signed message webhooks go directly to the backend /api/webhooks/waha endpoint. Send START to opt in and STOP to leave. Configuration does not confirm connectivity. Keep all credentials on the server.';
+    if (notice.textContent.includes('An administrator')) notice.textContent = 'An administrator configures and pairs the separate WAHA service. Its API and dashboard require authentication. Signed message webhooks go directly to the backend /api/webhooks/waha endpoint. Send YOJANA to opt in and STOP to leave. Configuration does not confirm connectivity. Keep all credentials on the server.';
   }
   async function resume() {
     let saved;

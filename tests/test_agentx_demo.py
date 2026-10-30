@@ -47,15 +47,15 @@ def test_literal_menu_labels_and_duplicate_call_link(persistent, monkeypatch):
     monkeypatch.setenv('PUBLIC_FRONTEND_ORIGIN', 'https://demo.invalid')
     sender=Mock();monkeypatch.setattr(waha,'_send',sender)
     with TestClient(create_app()) as client:
-        assert signed(client,'START','release-start').json()['status']=='started'
-        assert '1 Chat or 2 Call' in sender.call_args.args[-1]
-        assert signed(client,'1 Chat','release-chat').json()['status']=='chat_selected'
-        signed(client,'START','release-menu')
-        assert signed(client,'2 Call','release-call').json()['status']=='voice_link'
+        assert signed(client,'YOJANA','release-start').json()['status']=='started'
+        assert 'Reply *Chat* or *Call*' in sender.call_args.args[-1]
+        assert signed(client,'Chat','release-chat').json()['status']=='chat_selected'
+        signed(client,'YOJANA','release-menu')
+        assert signed(client,'Call','release-call').json()['status']=='voice_link'
         invite=sender.call_args.args[-1]
         assert invite.splitlines()[-1].startswith('https://demo.invalid/voice#handoff=')
         count=sender.call_count
-        assert signed(client,'2 Call','release-call').json()['status']=='duplicate'
+        assert signed(client,'Call','release-call').json()['status']=='duplicate'
         assert sender.call_count==count
         token=parse_qs(urlsplit(invite.splitlines()[-1]).fragment)['handoff'][0]
         assert client.post('/api/voice/redeem',json={'token':token}).status_code==200
@@ -69,7 +69,7 @@ def test_summary_never_routes_to_second_whatsapp_citizen(persistent, monkeypatch
         original_hash=tx.execute('SELECT chat_hash FROM waha_chats WHERE session_id=?',(sid,)).fetchone()['chat_hash']
     # The same public webhook is used, but the unrelated number gets its own case.
     body=waha.WAHAEvent(event='message',session='default',payload={
-        'from':'900000000001@c.us','id':'other-citizen-start','body':'START'})
+        'from':'900000000001@c.us','id':'other-citizen-start','body':'YOJANA'})
     assert waha.persistent_event(body)['status']=='started'
     assert browser.post(f'/api/voice/{cid}/end',json={'consent_whatsapp':True}).status_code==200
     sender.reset_mock();voice.deliver_summaries()

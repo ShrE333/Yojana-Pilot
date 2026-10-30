@@ -75,9 +75,9 @@ def setup_link(monkeypatch):
     monkeypatch.setenv('PUBLIC_FRONTEND_ORIGIN','https://frontend.invalid')
     sender=Mock();monkeypatch.setattr(waha,'_send',sender)
     client=TestClient(create_app())
-    assert signed(client,'START','start').status_code==200
-    assert '1 Chat or 2 Call' in sender.call_args.args[-1]
-    assert signed(client,'2','call').json()['status']=='voice_link'
+    assert signed(client,'YOJANA','start').status_code==200
+    assert 'Reply *Chat* or *Call*' in sender.call_args.args[-1]
+    assert signed(client,'Call','call').json()['status']=='voice_link'
     url=sender.call_args.args[-1].split('\n')[-1]
     token=parse_qs(urlsplit(url).fragment)['handoff'][0]
     return client,sender,token
@@ -107,7 +107,7 @@ def test_one_time_link_same_case_grant_and_no_plaintext_token(persistent,monkeyp
     assert stranger.get('/api/voice/'+cid).status_code==403
     assert stranger.post('/api/voice/redeem',json={'token':token}).status_code==410
     assert browser.get('/api/cases/'+sid).status_code==200
-    assert signed(channel,'2','call-again').status_code==200
+    assert signed(channel,'Call','call-again').status_code==200
     new_token=parse_qs(urlsplit(sender.call_args.args[-1].split('\n')[-1]).fragment)['handoff'][0]
     with case_store.transaction() as tx:
         tx.execute('UPDATE voice_links SET expires_at=?',(time.time()-1,))
@@ -118,16 +118,16 @@ def test_link_rejected_after_stop_and_invalid_origin(persistent,monkeypatch):
     channel,sender,token=setup_link(monkeypatch)
     assert signed(channel,'STOP','stop').status_code==200
     assert TestClient(create_app()).post('/api/voice/redeem',json={'token':token}).status_code==410
-    assert signed(channel,'START','restart').status_code==200
+    assert signed(channel,'YOJANA','restart').status_code==200
     monkeypatch.setenv('PUBLIC_FRONTEND_ORIGIN','http://unsafe.invalid')
-    assert signed(channel,'2','unsafe').status_code==503
+    assert signed(channel,'Call','unsafe').status_code==503
 
 
 def test_chat_to_call_preserves_the_existing_case(persistent,monkeypatch):
     configure_waha(monkeypatch);monkeypatch.setenv('PUBLIC_FRONTEND_ORIGIN','https://frontend.invalid')
     sender=Mock();monkeypatch.setattr(waha,'_send',sender);mock_extraction(monkeypatch,{'age':62,'occupation':'retired'})
-    channel=TestClient(create_app());signed(channel,'START','start-existing')
-    assert signed(channel,'1','chat-mode').json()['status']=='chat_selected'
+    channel=TestClient(create_app());signed(channel,'YOJANA','start-existing')
+    assert signed(channel,'Chat','chat-mode').json()['status']=='chat_selected'
     assert signed(channel,'I am retired and 62','profile-existing').json()['status']=='replied'
     with case_store.transaction() as tx:
         original=tx.execute('SELECT session_id FROM waha_chats').fetchone()['session_id']
@@ -140,7 +140,7 @@ def test_chat_to_call_preserves_the_existing_case(persistent,monkeypatch):
 
 def test_numeric_answer_in_chat_is_not_a_call_menu_choice(persistent,monkeypatch):
     configure_waha(monkeypatch);sender=Mock();monkeypatch.setattr(waha,'_send',sender)
-    channel=TestClient(create_app());signed(channel,'START','choice-start');signed(channel,'1','choose-chat')
+    channel=TestClient(create_app());signed(channel,'YOJANA','choice-start');signed(channel,'Chat','choose-chat')
     mock_extraction(monkeypatch,{'num_children':2})
     response=signed(channel,'2','two-children')
     assert response.json()['status']=='replied'

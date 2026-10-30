@@ -2,6 +2,7 @@
 FROM python:3.13.17-slim-bookworm
 ENV PYTHONUNBUFFERED=1 PYTHONDONTWRITEBYTECODE=1 PIP_NO_CACHE_DIR=1 \
     SCHEME_DB=/runtime/schemes.db LLM_LOG=0 HOME=/runtime
+RUN apt-get update && apt-get install -y --no-install-recommends ffmpeg && rm -rf /var/lib/apt/lists/*
 WORKDIR /app
 COPY requirements.lock.txt requirements-deploy.txt ./
 RUN pip install --no-cache-dir -r requirements-deploy.txt \
